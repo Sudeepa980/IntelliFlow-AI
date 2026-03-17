@@ -1,0 +1,3310 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IntelliFlow AI – Adaptive Traffic Signal Optimization</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Outfit:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+  html, body { height: 100%; margin: 0; padding: 0; }
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0e27;
+    --surface: #141d3e;
+    --text: #e2e8f0;
+    --primary: #00d9ff;
+    --secondary: #ff6b35;
+    --emergency: #ff1744;
+    --success: #06d6a0;
+  }
+
+  body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2a3456; border-radius: 3px; }
+
+  /* Traffic light glow */
+  .light-red { background: #ef4444; box-shadow: 0 0 12px #ef444488; }
+  .light-yellow { background: #eab308; box-shadow: 0 0 12px #eab30888; }
+  .light-green { background: #22c55e; box-shadow: 0 0 12px #22c55e88; }
+  .light-off { background: #1e293b; }
+  .light-emergency { background: #ff1744; box-shadow: 0 0 20px #ff174488; }
+
+  /* Emergency pulse */
+  @keyframes emergencyPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .emergency-active { animation: emergencyPulse 0.8s ease-in-out infinite; }
+
+  /* Pulse animation for active signals */
+  @keyframes signalPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .signal-active { animation: signalPulse 1.5s ease-in-out infinite; }
+
+  .vehicle-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    position: absolute;
+  }
+
+  /* Congestion heatmap gradient */
+  .congestion-low { background: linear-gradient(135deg, #06d6a022, #06d6a011); border-left: 3px solid #06d6a0; }
+  .congestion-med { background: linear-gradient(135deg, #eab30822, #eab30811); border-left: 3px solid #eab308; }
+  .congestion-high { background: linear-gradient(135deg, #ef444422, #ef444411); border-left: 3px solid #ef4444; }
+  .congestion-critical { background: linear-gradient(135deg, #ff174422, #ff174411); border-left: 3px solid #ff1744; }
+
+  /* Chart bar animation */
+  @keyframes barGrow { from { height: 0; } }
+  .bar-animate { animation: barGrow 0.6s ease-out; }
+
+  /* Card hover */
+  .card-hover { transition: transform 0.2s, box-shadow 0.2s; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 24px #00000044; }
+
+  /* Stagger fade in */
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeSlideIn 0.5s ease-out forwards; opacity: 0; }
+  .delay-1 { animation-delay: 0.1s; }
+  .delay-2 { animation-delay: 0.2s; }
+  .delay-3 { animation-delay: 0.3s; }
+  .delay-4 { animation-delay: 0.4s; }
+  .delay-5 { animation-delay: 0.5s; }
+
+  /* Canvas for detection viz */
+  .detection-canvas { image-rendering: pixelated; }
+
+  /* Tab styles */
+  .tab-btn { transition: all 0.2s; border-bottom: 2px solid transparent; }
+  .tab-btn.active { border-bottom-color: var(--primary); color: var(--primary); }
+
+  /* Intersection grid */
+  .intersection-cell {
+    width: 100%; aspect-ratio: 1;
+    border-radius: 4px; transition: all 0.3s;
+  }
+
+  /* Weather badge */
+  .weather-icon { font-size: 24px; }
+
+  /* Alert animations */
+  @keyframes slideIn {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .alert-slide { animation: slideIn 0.3s ease-out; }
+
+  /* Learning indicator */
+  @keyframes learning {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  .learning-active { animation: learning 1s ease-in-out infinite; }
+</style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full overflow-auto">
+  <div id="app" class="h-full w-full" style="background: var(--bg);">
+   <!-- Emergency Alert Banner -->
+   <div id="emergencyBanner" class="hidden fixed top-0 left-0 right-0 z-[100] alert-slide" style="background: linear-gradient(90deg, #ff1744, #ff6e40); padding: 12px; text-align: center;">
+    <div class="flex items-center justify-center gap-2" style="color: white; font-weight: bold;">
+     <i data-lucide="alert-triangle" style="width:18px;height:18px;"></i> <span id="emergencyMsg">Emergency vehicle detected - Signal priority override active!</span>
+    </div>
+   </div><!-- Header -->
+   <header class="sticky top-0 z-40 border-b" style="background: var(--surface); border-color: #1e293b;">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
+     <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--primary);"><i data-lucide="radio-tower" style="width:20px;height:20px;color:#0a0e27;"></i>
+      </div>
+      <div>
+       <h1 id="dashTitle" class="text-lg font-bold leading-tight" style="color: var(--text);">IntelliFlow AI</h1>
+       <p id="cityLabel" class="text-xs font-mono" style="color: var(--secondary);">Metro City • AI Adaptive System</p>
+      </div>
+     </div>
+     <div class="flex items-center gap-3">
+      <!-- Weather indicator -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs" style="background: #1e3a8a22; color: #60a5fa;">
+       <span id="weatherIcon" class="weather-icon">☀️</span> <span id="weatherLabel">Clear</span>
+      </div><!-- Sim Status -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono learning-active" style="background: #00d9ff18; color: var(--primary);"><span class="w-2 h-2 rounded-full" style="background: var(--primary); animation: signalPulse 1.5s infinite;"></span> <span id="simStatus">ACTIVE</span>
+      </div><!-- Environmental Impact -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs" style="background: #10b98122; color: #10b981;">
+       <i data-lucide="leaf" style="width:14px;height:14px;"></i> <span id="co2Saved">0</span>kg CO₂
+      </div><!-- Learning mode -->
+      <div class="text-xs font-mono px-2 py-1 rounded" id="learningBadge" style="background: #06d6a018; color: #06d6a0; display: none;">
+       <i data-lucide="brain" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px;"></i>LEARNING
+      </div>
+      <div class="text-xs font-mono" style="color: #64748b;"><span id="simClock">00:00:00</span>
+      </div><button id="toggleSimBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all" style="background: var(--primary); color: #0a0e27;"> <i data-lucide="pause" style="width:14px;height:14px;display:inline;vertical-align:middle;"></i> <span id="toggleLabel">Pause</span> </button>
+     </div>
+    </div>
+   </header><!-- Navigation Tabs -->
+   <nav class="border-b" style="background: var(--surface); border-color: #1e293b;">
+    <div class="max-w-[1600px] mx-auto px-4 flex gap-1 overflow-x-auto"><button class="tab-btn active px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="overview" style="color: var(--primary);"> <i data-lucide="layout-dashboard" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Overview </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="detection" style="color: #64748b;"> <i data-lucide="scan" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Detection </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="signals" style="color: #64748b;"> <i data-lucide="traffic-cone" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Signals </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="emergency" style="color: #64748b;"> <i data-lucide="ambulance" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Emergency </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="prediction" style="color: #64748b;"> <i data-lucide="brain" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Prediction </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="performance" style="color: #64748b;"> <i data-lucide="bar-chart-3" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Performance </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="learning" style="color: #64748b;"> <i data-lucide="zap" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Learning </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="explanation" style="color: #64748b;"> <i data-lucide="cpu" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>AI Decisions </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="environmental" style="color: #64748b;"> <i data-lucide="leaf" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Environmental </button>
+    </div>
+   </nav><!-- Main Content -->
+   <main class="max-w-[1600px] mx-auto p-4"><!-- Tab: Overview -->
+    <div id="tab-overview" class="tab-content"><!-- KPI Row -->
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="rounded-xl p-4 card-hover fade-in delay-1" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Vehicles Detected</span> <i data-lucide="car" style="width:16px;height:16px;color:var(--primary);"></i>
+       </div>
+       <p id="kpiVehicles" class="text-2xl font-bold font-mono" style="color: var(--text);">0</p>
+       <div id="kpiVehiclesTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        +0% vs baseline
+       </div>
+      </div>
+      <div class="rounded-xl p-4 card-hover fade-in delay-2" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Avg Wait Time</span> <i data-lucide="clock" style="width:16px;height:16px;color:var(--secondary);"></i>
+       </div>
+       <p id="kpiWait" class="text-2xl font-bold font-mono" style="color: var(--text);">0s</p>
+       <div id="kpiWaitTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        -0% reduction
+       </div>
+      </div>
+      <div class="rounded-xl p-4 card-hover fade-in delay-3" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Congestion Index</span> <i data-lucide="activity" style="width:16px;height:16px;color:#ef4444;"></i>
+       </div>
+       <p id="kpiCongestion" class="text-2xl font-bold font-mono" style="color: var(--text);">0.0</p>
+       <div id="kpiCongTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        Low congestion
+       </div>
+      </div>
+      <div class="rounded-xl p-4 card-hover fade-in delay-4" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Throughput</span> <i data-lucide="zap" style="width:16px;height:16px;color:#a78bfa;"></i>
+       </div>
+       <p id="kpiThroughput" class="text-2xl font-bold font-mono" style="color: var(--text);">0/min</p>
+       <div id="kpiThroughTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        +0% improvement
+       </div>
+      </div>
+     </div><!-- Control Panel: Traffic Speed & Scenario -->
+     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div class="rounded-xl p-3 fade-in delay-2" style="background: var(--surface);"><label class="text-xs font-medium block mb-2" style="color: var(--text);"> <i data-lucide="zap" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:6px;"></i>Traffic Speed Control </label>
+       <div class="flex items-center gap-2"><input type="range" id="trafficSpeedSlider" min="0.3" max="3" step="0.1" value="1" class="flex-1" style="cursor: pointer;"> <span id="speedValue" class="text-xs font-mono px-2 py-1 rounded" style="background: var(--bg); color: var(--primary);">1.0x</span>
+       </div>
+       <p class="text-[10px] mt-1" style="color: #64748b;">Adjust simulation speed</p>
+      </div>
+      <div class="rounded-xl p-3 fade-in delay-2" style="background: var(--surface);"><label class="text-xs font-medium block mb-2" style="color: var(--text);"> <i data-lucide="cloud" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:6px;"></i>Weather Scenario </label> <select id="weatherSelect" class="w-full px-2 py-1 rounded text-xs" style="background: var(--bg); color: var(--text); border: 1px solid #2a3456;"> <option value="clear">☀️ Clear</option> <option value="rainy">🌧️ Rainy (+30% traffic)</option> <option value="foggy">🌫️ Foggy (+50% traffic)</option> <option value="snowy">❄️ Snowy (+80% traffic)</option> </select>
+      </div>
+      <div class="rounded-xl p-3 fade-in delay-2" style="background: var(--surface);"><label class="text-xs font-medium block mb-2" style="color: var(--text);"> <i data-lucide="activity" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:6px;"></i>Traffic Intensity </label>
+       <div class="flex items-center gap-2"><button id="intensityLowBtn" class="flex-1 px-2 py-1 text-xs rounded transition" style="background: #06d6a022; color: #06d6a0; border: 1px solid #06d6a0;">Low</button> <button id="intensityMedBtn" class="flex-1 px-2 py-1 text-xs rounded transition" style="background: #eab30822; color: #eab308; border: 1px solid #eab308;">Med</button> <button id="intensityHighBtn" class="flex-1 px-2 py-1 text-xs rounded transition" style="background: #ef444422; color: #ef4444; border: 1px solid #ef4444;">High</button>
+       </div>
+      </div>
+     </div><!-- Main Grid: Map + Sidebar -->
+     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4"><!-- Intersection Map -->
+      <div class="lg:col-span-2 rounded-xl p-4 fade-in delay-3" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold" style="color: var(--text);">Live Intersection Grid</h2><span class="text-xs font-mono px-2 py-1 rounded" style="background: #06d6a018; color: var(--primary);">4×4 Network</span>
+       </div>
+       <div id="intersectionGrid" class="grid grid-cols-4 gap-2" style="min-height: 280px;"></div>
+       <div class="flex items-center gap-4 mt-3 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #22c55e;"></span> Low</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #eab308;"></span> Medium</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #ef4444;"></span> High</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #a78bfa;"></span> Adaptive Active</span>
+       </div>
+      </div><!-- Sidebar -->
+      <div class="space-y-4"><!-- Signal Status -->
+       <div class="rounded-xl p-4 fade-in delay-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Signal Optimization</h2>
+        <div id="signalList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+       </div><!-- Congestion Alerts -->
+       <div class="rounded-xl p-4 fade-in delay-5" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Active Alerts</h2>
+        <div id="alertList" class="space-y-2 max-h-40 overflow-y-auto"></div>
+       </div>
+      </div>
+     </div><!-- Throughput Chart -->
+     <div class="rounded-xl p-4 mt-4 fade-in delay-5" style="background: var(--surface);">
+      <div class="flex items-center justify-between mb-3">
+       <h2 class="text-sm font-semibold" style="color: var(--text);">Throughput Over Time</h2>
+       <div class="flex items-center gap-3 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-3 h-1 rounded" style="background: var(--primary);"></span> Adaptive</span> <span class="flex items-center gap-1"><span class="w-3 h-1 rounded" style="background: var(--secondary);"></span> Fixed Timing</span>
+       </div>
+      </div>
+      <div id="throughputChart" class="flex items-end gap-1" style="height: 120px;"></div>
+     </div>
+    </div><!-- Tab: Detection -->
+    <div id="tab-detection" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="video" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Computer Vision — Vehicle Detection</h2>
+       <div class="relative rounded-lg overflow-hidden" style="background: #0a0e18;">
+        <canvas id="detectionCanvas" width="560" height="360" class="w-full detection-canvas" style="background: #111827;"></canvas>
+        <div class="absolute top-2 left-2 px-2 py-1 rounded text-xs font-mono" style="background: #00000088; color: var(--primary);"><span class="w-2 h-2 rounded-full inline-block signal-active" style="background: var(--primary);"></span> CAM-01 • Intersection A1
+        </div>
+        <div class="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-mono" style="background: #00000088; color: var(--text);"><span id="detFps">30</span> FPS | <span id="detCount">0</span> vehicles
+        </div>
+       </div>
+       <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-lg p-2" style="background: var(--bg);">
+         <p class="text-xs" style="color: #64748b;">Cars</p>
+         <p id="detCars" class="text-lg font-bold font-mono" style="color: var(--primary);">0</p>
+        </div>
+        <div class="rounded-lg p-2" style="background: var(--bg);">
+         <p class="text-xs" style="color: #64748b;">Trucks</p>
+         <p id="detTrucks" class="text-lg font-bold font-mono" style="color: var(--secondary);">0</p>
+        </div>
+        <div class="rounded-lg p-2" style="background: var(--bg);">
+         <p class="text-xs" style="color: #64748b;">Bikes</p>
+         <p id="detBikes" class="text-lg font-bold font-mono" style="color: #a78bfa;">0</p>
+        </div>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Density Heatmap</h2>
+        <canvas id="heatmapCanvas" width="300" height="300" class="w-full rounded-lg" style="background: #111827;"></canvas>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Detection Confidence</h2>
+        <div id="confidenceBars" class="space-y-2"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Signals -->
+    <div id="tab-signals" class="tab-content hidden">
+     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="signalCards"></div>
+     <div class="rounded-xl p-4 mt-4" style="background: var(--surface);">
+      <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Signal Timing Comparison</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+       <div>
+        <h3 class="text-xs font-mono mb-2" style="color: var(--secondary);">Fixed Timing (Baseline)</h3>
+        <div id="fixedTimingBars" class="space-y-1"></div>
+       </div>
+       <div>
+        <h3 class="text-xs font-mono mb-2" style="color: var(--primary);">AI Adaptive Timing</h3>
+        <div id="adaptiveTimingBars" class="space-y-1"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Prediction -->
+    <div id="tab-prediction" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="brain" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Congestion Forecast — Next 60 min</h2>
+       <div id="forecastChart" class="relative" style="height: 200px;"></div>
+       <div class="flex items-center gap-3 mt-3 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-8 h-1 rounded" style="background: var(--primary);"></span> Predicted</span> <span class="flex items-center gap-1"><span class="w-8 h-1 rounded" style="background: #64748b;"></span> Actual</span> <span class="flex items-center gap-1"><span class="w-8 h-1 rounded" style="background: var(--secondary); opacity:0.3;"></span> Confidence Band</span>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Model Metrics</h2>
+        <div class="grid grid-cols-2 gap-3">
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">Accuracy</p>
+          <p id="predAccuracy" class="text-xl font-bold font-mono" style="color: var(--primary);">0%</p>
+         </div>
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">RMSE</p>
+          <p id="predRmse" class="text-xl font-bold font-mono" style="color: var(--secondary);">0.0</p>
+         </div>
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">Precision</p>
+          <p id="predPrecision" class="text-xl font-bold font-mono" style="color: #a78bfa;">0%</p>
+         </div>
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">Response Time</p>
+          <p id="predResponse" class="text-xl font-bold font-mono" style="color: var(--text);">0ms</p>
+         </div>
+        </div>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Predicted Hotspots</h2>
+        <div id="hotspotList" class="space-y-2"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Emergency -->
+    <div id="tab-emergency" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="ambulance" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Emergency Vehicle Priority System</h2>
+       <div id="emergencyVehicles" class="space-y-3"></div>
+       <div class="mt-4 p-3 rounded-lg" style="background: var(--bg);">
+        <p class="text-xs" style="color: #94a3b8; margin-bottom: 10px;">Status: <span id="emergencyStatus" style="color: var(--success);">No active emergencies</span></p><button id="triggerEmergencyBtn" class="px-4 py-2 rounded-lg text-xs font-semibold transition-all" style="background: #ff1744; color: white;">Trigger Emergency Vehicle</button>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Emergency Stats</h2>
+        <div class="space-y-2">
+         <div class="flex justify-between text-xs">
+          <span style="color: #64748b;">Total Responses</span> <span id="emergencyCount" class="font-mono" style="color: var(--primary);">0</span>
+         </div>
+         <div class="flex justify-between text-xs">
+          <span style="color: #64748b;">Avg Response Time</span> <span id="emergencyAvgTime" class="font-mono" style="color: var(--secondary);">0ms</span>
+         </div>
+         <div class="flex justify-between text-xs">
+          <span style="color: #64748b;">Priority Overrides</span> <span id="emergencyOverrides" class="font-mono" style="color: #ff1744;">0</span>
+         </div>
+        </div>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Clear Path Route</h2>
+        <div id="routeSuggestions" class="space-y-2 text-xs"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Performance -->
+    <div id="tab-performance" class="tab-content hidden">
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">Wait Time Reduction</p>
+       <p id="perfWaitRed" class="text-3xl font-bold font-mono" style="color: var(--primary);">0%</p>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">Congestion Estimation Accuracy</p>
+       <p id="perfCongAcc" class="text-3xl font-bold font-mono" style="color: var(--secondary);">0%</p>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">System Responsiveness</p>
+       <p id="perfResp" class="text-3xl font-bold font-mono" style="color: #a78bfa;">0ms</p>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">Total Optimizations</p>
+       <p id="perfOptCount" class="text-3xl font-bold font-mono" style="color: var(--text);">0</p>
+      </div>
+     </div>
+     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Adaptive vs Fixed — Wait Times</h2>
+       <div id="perfCompChart" class="flex items-end gap-1" style="height: 180px;"></div>
+       <div class="flex items-center gap-4 mt-2 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: var(--primary);"></span> Adaptive AI</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: var(--secondary);"></span> Fixed Timing</span>
+       </div>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Event Log</h2>
+       <div id="eventLog" class="space-y-1 max-h-64 overflow-y-auto font-mono text-xs" style="color: #94a3b8;"></div>
+      </div>
+     </div>
+    </div><!-- Tab: Learning -->
+    <div id="tab-learning" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="brain" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Self-Learning Optimization</h2>
+       <div class="space-y-2 mb-4">
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background: var(--bg);">
+         <div>
+          <p class="text-xs font-semibold" style="color: var(--text);">Learning Status</p>
+          <p class="text-xs" style="color: #94a3b8;">AI model adapting to traffic patterns</p>
+         </div>
+         <div id="learningStatus" class="w-3 h-3 rounded-full" style="background: #06d6a0; animation: learning 1s infinite;"></div>
+        </div>
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background: var(--bg);">
+         <div>
+          <p class="text-xs font-semibold" style="color: var(--text);">Model Accuracy</p>
+          <p id="modelAccuracy" class="text-lg font-bold font-mono" style="color: var(--primary);">0%</p>
+         </div>
+        </div>
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background: var(--bg);">
+         <div>
+          <p class="text-xs font-semibold" style="color: var(--text);">Patterns Learned</p>
+          <p id="patternsLearned" class="text-lg font-bold font-mono" style="color: var(--success);">0</p>
+         </div>
+        </div>
+       </div>
+       <div class="p-3 rounded-lg" style="background: var(--bg);">
+        <h3 class="text-xs font-semibold mb-2" style="color: var(--text);">Training Epochs</h3>
+        <div id="learningChart" class="flex items-end gap-1" style="height: 120px;"></div>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Model Improvements</h2>
+        <div id="learningMetrics" class="space-y-2 text-xs"></div>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Data Insights</h2>
+        <div id="dataInsights" class="space-y-2 text-xs"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: AI Decision Explanation -->
+    <div id="tab-explanation" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="cpu" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> AI Decision Logic</h2>
+       <div id="decisionExplanation" class="space-y-3 max-h-96 overflow-y-auto font-mono text-xs" style="color: #e2e8f0;">
+        <div class="p-3 rounded-lg" style="background: var(--bg);">
+         <p style="color: #94a3b8;">Waiting for intersection data...</p>
+        </div>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">AI Model Health</h2>
+        <div class="space-y-2">
+         <div class="flex justify-between items-center">
+          <span class="text-xs" style="color: #64748b;">Model Confidence</span> <span id="modelConfidence" class="text-xs font-mono" style="color: var(--primary);">0%</span>
+         </div>
+         <div class="h-2 rounded-full" style="background: var(--bg);">
+          <div id="confidenceBar" class="h-full rounded-full transition-all" style="background: var(--primary); width: 0%;"></div>
+         </div>
+         <div class="flex justify-between items-center mt-2">
+          <span class="text-xs" style="color: #64748b;">Signal Optimization Rate</span> <span id="optimizationRate" class="text-xs font-mono" style="color: var(--secondary);">0/min</span>
+         </div>
+         <div class="flex justify-between items-center mt-2">
+          <span class="text-xs" style="color: #64748b;">Avg Accuracy</span> <span id="avgAccuracy" class="text-xs font-mono" style="color: #a78bfa;">0%</span>
+         </div>
+        </div>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Top Decisions</h2>
+        <div id="topDecisions" class="space-y-2 text-xs"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Environmental Impact -->
+    <div id="tab-environmental" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="leaf" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Environmental Impact</h2>
+       <div class="space-y-3">
+        <div class="rounded-lg p-3" style="background: var(--bg);">
+         <p class="text-[10px]" style="color: #94a3b8;">CO₂ Emissions Saved</p>
+         <p id="co2Reduction" class="text-3xl font-bold font-mono" style="color: #10b981;">0</p>
+         <p class="text-xs mt-1" style="color: #94a3b8;">kg vs fixed-timing baseline</p>
+        </div>
+        <div class="rounded-lg p-3" style="background: var(--bg);">
+         <p class="text-[10px]" style="color: #94a3b8;">Fuel Efficiency Gain</p>
+         <p id="fuelSaved" class="text-3xl font-bold font-mono" style="color: #10b981;">0</p>
+         <p class="text-xs mt-1" style="color: #94a3b8;">liters saved</p>
+        </div>
+        <div class="rounded-lg p-3" style="background: var(--bg);">
+         <p class="text-[10px]" style="color: #94a3b8;">Equivalent Trees Planted</p>
+         <p id="treesEquiv" class="text-3xl font-bold font-mono" style="color: #10b981;">0</p>
+         <p class="text-xs mt-1" style="color: #94a3b8;">tree CO₂ absorption/year</p>
+        </div>
+       </div>
+      </div>
+      <div class="lg:col-span-2 space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Emission Timeline</h2>
+        <canvas id="emissionChart" width="600" height="200" class="w-full" style="background: var(--bg); border-radius: 6px;"></canvas>
+       </div>
+       <div class="grid grid-cols-2 gap-3">
+        <div class="rounded-xl p-3" style="background: var(--surface);">
+         <p class="text-xs" style="color: #64748b;">Idle Time Reduction</p>
+         <p id="idleReduction" class="text-2xl font-bold font-mono" style="color: var(--primary);">0%</p>
+        </div>
+        <div class="rounded-xl p-3" style="background: var(--surface);">
+         <p class="text-xs" style="color: #64748b;">Average Speed Increase</p>
+         <p id="speedIncrease" class="text-2xl font-bold font-mono" style="color: var(--secondary);">0 km/h</p>
+        </div>
+       </div>
+      </div>
+     </div>
+    </div>
+   </main>
+  </div>
+  <script>
+// ============================================================
+// SIMULATION ENGINE - ENHANCED WITH ALL FEATURES
+// ============================================================
+
+const SIM = {
+  running: true,
+  tick: 0,
+  speed: 1,
+  intersections: [],
+  throughputHistory: [],
+  fixedThroughputHistory: [],
+  forecastData: [],
+  actualData: [],
+  events: [],
+  totalOptimizations: 0,
+  // New features
+  weather: 'clear',
+  weatherFactor: 1,
+  emergencyVehicles: [],
+  emergencyCount: 0,
+  emergencyTotalTime: 0,
+  emergencyOverrides: 0,
+  learningMode: false,
+  modelAccuracy: 65,
+  patternsLearned: 0,
+  trainingEpochs: [],
+  aiModel: { weights: [], lastAccuracy: 65 },
+  // Environmental
+  co2Saved: 0,
+  fuelSaved: 0,
+  idleTimeReduction: 0,
+  // Control
+  trafficSpeedMultiplier: 1,
+  trafficIntensity: 'medium',
+  decisionLog: [],
+};
+
+const GRID = 4;
+const INTERSECTION_COUNT = GRID * GRID;
+const INTERSECTION_NAMES = [];
+
+// Generate intersection names
+for (let r = 0; r < GRID; r++) {
+  for (let c = 0; c < GRID; c++) {
+    INTERSECTION_NAMES.push(String.fromCharCode(65 + r) + (c + 1));
+  }
+}
+
+// Weather effects on congestion
+const WEATHER_CONFIG = {
+  clear: { congestionFactor: 1, name: 'Clear', icon: '☀️', color: '#60a5fa' },
+  rainy: { congestionFactor: 1.3, name: 'Rainy', icon: '🌧️', color: '#3b82f6' },
+  foggy: { congestionFactor: 1.5, name: 'Foggy', icon: '🌫️', color: '#94a3b8' },
+  snowy: { congestionFactor: 1.8, name: 'Snowy', icon: '❄️', color: '#e0f2fe' },
+};
+
+// Initialize intersections with traffic state
+function initIntersections() {
+  SIM.intersections = INTERSECTION_NAMES.map((name, i) => ({
+    id: i,
+    name,
+    density: Math.random() * 0.4 + 0.1,
+    phase: Math.floor(Math.random() * 3),
+    phaseTimer: Math.floor(Math.random() * 30) + 5,
+    fixedGreen: 30,
+    adaptiveGreen: 30,
+    waitTime: Math.random() * 20 + 5,
+    fixedWaitTime: Math.random() * 30 + 15,
+    vehicles: Math.floor(Math.random() * 20) + 3,
+    throughput: Math.floor(Math.random() * 8) + 2,
+    adaptiveActive: false,
+    cars: 0, trucks: 0, bikes: 0,
+    emergencyPriority: false,
+    timeToService: 0,
+  }));
+}
+
+// Emergency vehicle class
+class EmergencyVehicle {
+  constructor(id, startIntersection) {
+    this.id = id;
+    this.createdAt = SIM.tick;
+    this.startIntersection = startIntersection;
+    this.currentIntersection = startIntersection;
+    this.targetIntersection = Math.floor(Math.random() * 16);
+    this.status = 'en-route';
+    this.responseStarted = SIM.tick;
+    this.cleared = false;
+  }
+
+  getRoute() {
+    const route = [];
+    const startRow = Math.floor(this.currentIntersection / 4);
+    const startCol = this.currentIntersection % 4;
+    const endRow = Math.floor(this.targetIntersection / 4);
+    const endCol = this.targetIntersection % 4;
+
+    let r = startRow, c = startCol;
+    while (r !== endRow || c !== endCol) {
+      if (r < endRow) r++;
+      else if (r > endRow) r--;
+      else if (c < endCol) c++;
+      else if (c > endCol) c--;
+      route.push(r * 4 + c);
+    }
+    return route;
+  }
+}
+
+// Trigger emergency vehicle
+function triggerEmergencyVehicle() {
+  const startIntersection = Math.floor(Math.random() * 16);
+  const emergency = new EmergencyVehicle(SIM.emergencyCount++, startIntersection);
+  SIM.emergencyVehicles.push(emergency);
+  addEvent(`🚨 Emergency vehicle #${emergency.id} dispatched from ${INTERSECTION_NAMES[startIntersection]}`);
+  showEmergencyBanner(true);
+}
+
+function processEmergencies() {
+  SIM.emergencyVehicles = SIM.emergencyVehicles.filter(em => {
+    const route = em.getRoute();
+    em.currentIntersection = route[0] || em.targetIntersection;
+
+    // Check if reached destination
+    if (em.currentIntersection === em.targetIntersection) {
+      if (!em.cleared) {
+        em.cleared = true;
+        em.status = 'arrived';
+        const responseTime = (SIM.tick - em.createdAt) * 2;
+        SIM.emergencyTotalTime += responseTime;
+        SIM.emergencyOverrides++;
+        addEvent(`✓ Emergency vehicle #${em.id} arrived at destination (${responseTime}ms)`);
+        showEmergencyBanner(false);
+      }
+      return SIM.tick - em.createdAt < 200;
+    }
+
+    // Set emergency priority on current intersection
+    if (em.currentIntersection < 16) {
+      const int = SIM.intersections[em.currentIntersection];
+      int.emergencyPriority = true;
+      int.adaptiveGreen = Math.max(int.adaptiveGreen, 40);
+      int.phase = 0;
+      int.phaseTimer = int.adaptiveGreen;
+      SIM.emergencyOverrides++;
+    }
+
+    return true;
+  });
+}
+
+// Update weather
+function updateWeather() {
+  if (SIM.tick % 60 === 0) {
+    const weatherTypes = Object.keys(WEATHER_CONFIG);
+    SIM.weather = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
+    SIM.weatherFactor = WEATHER_CONFIG[SIM.weather].congestionFactor;
+
+    const config = WEATHER_CONFIG[SIM.weather];
+    document.getElementById('weatherIcon').textContent = config.icon;
+    document.getElementById('weatherLabel').textContent = config.name;
+
+    addEvent(`🌤️ Weather changed to ${config.name}`);
+  }
+}
+
+// Train model
+function trainModel() {
+  if (SIM.tick % 40 === 0 && SIM.learningMode) {
+    const avgDensity = SIM.intersections.reduce((s, i) => s + i.density, 0) / INTERSECTION_COUNT;
+    const prediction = Math.random() * 0.8;
+    const error = Math.abs(prediction - avgDensity);
+    const improvement = Math.max(0, 1 - error) * 100;
+
+    SIM.modelAccuracy = Math.min(95, SIM.modelAccuracy + improvement * 0.01);
+    SIM.patternsLearned++;
+    SIM.trainingEpochs.push(SIM.modelAccuracy);
+    if (SIM.trainingEpochs.length > 30) SIM.trainingEpochs.shift();
+
+    if (SIM.patternsLearned % 5 === 0) {
+      addEvent(`📚 Model trained on pattern #${SIM.patternsLearned} (accuracy: ${SIM.modelAccuracy.toFixed(1)}%)`);
+      document.getElementById('learningBadge').style.display = 'inline-block';
+    }
+  }
+}
+
+// Environmental impact calculation
+function calculateEnvironmentalImpact() {
+  const avgWait = SIM.intersections.reduce((s, i) => s + i.waitTime, 0) / INTERSECTION_COUNT;
+  const avgFixedWait = SIM.intersections.reduce((s, i) => s + i.fixedWaitTime, 0) / INTERSECTION_COUNT;
+  const waitReduction = Math.max(0, ((avgFixedWait - avgWait) / avgFixedWait));
+  
+  // CO2 savings: ~0.02kg CO2 per minute of waiting time reduction
+  SIM.co2Saved = waitReduction * 0.02 * SIM.tick * 0.1;
+  SIM.fuelSaved = waitReduction * 0.001 * SIM.tick * 0.05;
+  SIM.idleTimeReduction = waitReduction * 100;
+
+  const totalVehicles = SIM.intersections.reduce((s, i) => s + i.vehicles, 0);
+  const avgSpeed = 40 * (1 - SIM.intersections.reduce((s, i) => s + i.density, 0) / INTERSECTION_COUNT);
+  
+  return { co2Saved: SIM.co2Saved, fuelSaved: SIM.fuelSaved, idleTimeReduction: SIM.idleTimeReduction, avgSpeed };
+}
+
+// AI Decision logging
+function logAIDecision(intersection, oldGreen, newGreen, reason) {
+  const decision = {
+    time: formatClock(SIM.tick),
+    intersection: intersection.name,
+    oldGreen,
+    newGreen,
+    density: (intersection.density * 100).toFixed(0),
+    reason,
+  };
+  SIM.decisionLog.push(decision);
+  if (SIM.decisionLog.length > 20) SIM.decisionLog.shift();
+}
+
+// Suggest routes
+function suggestRoutes() {
+  const routes = [];
+  for (let i = 0; i < 3; i++) {
+    const density = Math.random() * 0.5;
+    const time = Math.floor(8 + density * 20);
+    routes.push({
+      name: `Route ${i + 1}`,
+      density: (density * 100).toFixed(0),
+      time: time,
+      cost: Math.floor(Math.random() * 30) + 10,
+    });
+  }
+  return routes.sort((a, b) => a.time - b.time);
+}
+
+// ============================================================
+// SIMULATION STEP
+// ============================================================
+
+function simStep() {
+  if (!SIM.running) return;
+  SIM.tick += SIM.trafficSpeedMultiplier;
+
+  updateWeather();
+  processEmergencies();
+  trainModel();
+
+  const hourOfDay = (SIM.tick * 0.02) % 24;
+  const rushFactor = (1 + 0.8 * Math.exp(-((hourOfDay - 8) ** 2) / 4) + 0.6 * Math.exp(-((hourOfDay - 17) ** 2) / 4)) * SIM.weatherFactor;
+  
+  // Apply traffic intensity multiplier
+  let intensityMultiplier = 1;
+  if (SIM.trafficIntensity === 'low') intensityMultiplier = 0.5;
+  else if (SIM.trafficIntensity === 'high') intensityMultiplier = 1.5;
+
+  SIM.intersections.forEach((int, idx) => {
+    const neighborInfluence = getNeighborDensity(idx) * 0.1;
+    int.density += (Math.random() - 0.48) * 0.06 * rushFactor * intensityMultiplier + neighborInfluence;
+    int.density = Math.max(0.05, Math.min(1, int.density));
+
+    int.vehicles = Math.floor(int.density * 50 * intensityMultiplier) + Math.floor(Math.random() * 5);
+    int.cars = Math.floor(int.vehicles * 0.7);
+    int.trucks = Math.floor(int.vehicles * 0.15);
+    int.bikes = int.vehicles - int.cars - int.trucks;
+
+    // Phase timing with emergency override
+    if (int.emergencyPriority) {
+      int.phase = 0;
+      int.phaseTimer = 40;
+      int.emergencyPriority = false;
+    } else {
+      int.phaseTimer--;
+      if (int.phaseTimer <= 0) {
+        int.phase = (int.phase + 1) % 3;
+        if (int.phase === 0) {
+          const oldGreen = int.adaptiveGreen;
+          int.adaptiveGreen = Math.floor(15 + int.density * 45);
+          int.phaseTimer = int.adaptiveGreen;
+          int.adaptiveActive = int.density > 0.5;
+          if (int.adaptiveActive) {
+            SIM.totalOptimizations++;
+            logAIDecision(int, oldGreen, int.adaptiveGreen, `Density: ${(int.density * 100).toFixed(0)}%`);
+          }
+        } else if (int.phase === 1) {
+          int.phaseTimer = 4;
+        } else {
+          int.phaseTimer = Math.floor(10 + (1 - int.density) * 20);
+        }
+      }
+    }
+
+    int.waitTime = Math.max(3, int.density * 25 + (Math.random() - 0.5) * 4);
+    int.fixedWaitTime = Math.max(8, int.density * 40 + (Math.random() - 0.5) * 5);
+    int.throughput = Math.floor((1 - int.density * 0.6) * 12 + Math.random() * 3);
+  });
+
+  const avgAdaptiveTP = SIM.intersections.reduce((s, i) => s + i.throughput, 0) / INTERSECTION_COUNT;
+  const avgFixedTP = avgAdaptiveTP * (0.6 + Math.random() * 0.15);
+
+  SIM.throughputHistory.push(avgAdaptiveTP);
+  SIM.fixedThroughputHistory.push(avgFixedTP);
+  if (SIM.throughputHistory.length > 60) {
+    SIM.throughputHistory.shift();
+    SIM.fixedThroughputHistory.shift();
+  }
+
+  if (SIM.tick % 5 === 0) {
+    const avgDensity = SIM.intersections.reduce((s, i) => s + i.density, 0) / INTERSECTION_COUNT;
+    SIM.actualData.push(avgDensity);
+    SIM.forecastData.push(avgDensity + (Math.random() - 0.5) * 0.12);
+    if (SIM.actualData.length > 30) {
+      SIM.actualData.shift();
+      SIM.forecastData.shift();
+    }
+  }
+
+  if (SIM.tick % 8 === 0) {
+    const congested = SIM.intersections.filter(i => i.density > 0.7);
+    if (congested.length > 0) {
+      const target = congested[Math.floor(Math.random() * congested.length)];
+      addEvent(`Signal ${target.name} adjusted: green +${Math.floor(target.density * 15)}s`);
+    }
+  }
+}
+
+function getNeighborDensity(idx) {
+  const row = Math.floor(idx / GRID);
+  const col = idx % GRID;
+  let sum = 0, count = 0;
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr, dc]) => {
+    const nr = row + dr, nc = col + dc;
+    if (nr >= 0 && nr < GRID && nc >= 0 && nc < GRID) {
+      sum += SIM.intersections[nr * GRID + nc].density;
+      count++;
+    }
+  });
+  return count > 0 ? (sum / count - SIM.intersections[idx].density) : 0;
+}
+
+function addEvent(msg) {
+  const time = formatClock(SIM.tick);
+  SIM.events.unshift({ time, msg });
+  if (SIM.events.length > 50) SIM.events.pop();
+}
+
+function showEmergencyBanner(show) {
+  const banner = document.getElementById('emergencyBanner');
+  if (show) {
+    banner.classList.remove('hidden');
+  } else if (SIM.emergencyVehicles.length === 0) {
+    banner.classList.add('hidden');
+  }
+}
+
+function formatClock(tick) {
+  const totalSec = tick * 2;
+  const h = Math.floor(totalSec / 3600) % 24;
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// ============================================================
+// RENDERING FUNCTIONS
+// ============================================================
+
+function renderOverview() {
+  const totalVehicles = SIM.intersections.reduce((s, i) => s + i.vehicles, 0);
+  const avgWait = SIM.intersections.reduce((s, i) => s + i.waitTime, 0) / INTERSECTION_COUNT;
+  const avgFixedWait = SIM.intersections.reduce((s, i) => s + i.fixedWaitTime, 0) / INTERSECTION_COUNT;
+  const avgDensity = SIM.intersections.reduce((s, i) => s + i.density, 0) / INTERSECTION_COUNT;
+  const avgTP = SIM.intersections.reduce((s, i) => s + i.throughput, 0) / INTERSECTION_COUNT;
+  const waitReduction = Math.max(0, ((avgFixedWait - avgWait) / avgFixedWait) * 100);
+
+  document.getElementById('kpiVehicles').textContent = totalVehicles;
+  document.getElementById('kpiWait').textContent = avgWait.toFixed(1) + 's';
+  document.getElementById('kpiWaitTrend').textContent = `-${waitReduction.toFixed(0)}% vs fixed`;
+  document.getElementById('kpiCongestion').textContent = avgDensity.toFixed(2);
+  document.getElementById('kpiCongTrend').textContent = avgDensity < 0.4 ? 'Low congestion' : avgDensity < 0.65 ? 'Moderate' : 'High congestion';
+  document.getElementById('kpiCongTrend').style.color = avgDensity < 0.4 ? 'var(--primary)' : avgDensity < 0.65 ? 'var(--secondary)' : '#ef4444';
+  document.getElementById('kpiThroughput').textContent = avgTP.toFixed(1) + '/min';
+  document.getElementById('kpiThroughTrend').textContent = `+${(waitReduction * 0.8).toFixed(0)}% improvement`;
+  document.getElementById('simClock').textContent = formatClock(SIM.tick);
+
+  // Intersection grid
+  const grid = document.getElementById('intersectionGrid');
+  SIM.intersections.forEach((int, i) => {
+    let cell = grid.children[i];
+    if (!cell) {
+      cell = document.createElement('div');
+      cell.className = 'intersection-cell relative flex flex-col items-center justify-center cursor-pointer';
+      cell.title = int.name;
+      cell.innerHTML = `
+        <span class="text-xs font-mono font-bold" style="color: var(--text);">${int.name}</span>
+        <span class="text-[10px] font-mono mt-0.5" style="color: #94a3b8;">0</span>
+        <div class="flex gap-0.5 mt-1">
+          <span class="w-2 h-2 rounded-full"></span>
+          <span class="w-2 h-2 rounded-full"></span>
+          <span class="w-2 h-2 rounded-full"></span>
+        </div>
+      `;
+      grid.appendChild(cell);
+    }
+
+    const hue = int.density < 0.4 ? '#22c55e33' : int.density < 0.65 ? '#eab30833' : '#ef444433';
+    const border = int.adaptiveActive ? '2px solid #a78bfa' : '1px solid #1e293b';
+    cell.style.background = hue;
+    cell.style.border = border;
+
+    cell.children[1].textContent = int.vehicles + ' veh';
+
+    const lights = cell.children[2].children;
+    lights[0].className = 'w-2 h-2 rounded-full ' + (int.phase === 2 ? 'light-red signal-active' : 'light-off');
+    lights[1].className = 'w-2 h-2 rounded-full ' + (int.phase === 1 ? 'light-yellow signal-active' : 'light-off');
+    lights[2].className = 'w-2 h-2 rounded-full ' + (int.phase === 0 ? 'light-green signal-active' : 'light-off');
+  });
+
+  // Signal list
+  const signalList = document.getElementById('signalList');
+  const sorted = [...SIM.intersections].sort((a, b) => b.density - a.density).slice(0, 6);
+  while (signalList.children.length < sorted.length) {
+    const d = document.createElement('div');
+    d.className = 'flex items-center justify-between rounded-lg px-3 py-2';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `<div><span class="text-xs font-mono font-bold"></span><span class="text-[10px] ml-2" style="color: #64748b;"></span></div><span class="text-xs font-mono px-2 py-0.5 rounded"></span>`;
+    signalList.appendChild(d);
+  }
+  sorted.forEach((int, i) => {
+    const el = signalList.children[i];
+    el.children[0].children[0].textContent = int.name;
+    el.children[0].children[0].style.color = 'var(--text)';
+    el.children[0].children[1].textContent = `${int.adaptiveGreen}s green`;
+    const badge = el.children[1];
+    if (int.adaptiveActive) {
+      badge.textContent = 'ADAPTIVE';
+      badge.style.background = '#a78bfa22';
+      badge.style.color = '#a78bfa';
+    } else {
+      badge.textContent = int.density < 0.4 ? 'NORMAL' : 'MONITORING';
+      badge.style.background = int.density < 0.4 ? '#06d6a018' : '#eab30818';
+      badge.style.color = int.density < 0.4 ? 'var(--primary)' : 'var(--secondary)';
+    }
+  });
+  while (signalList.children.length > sorted.length) signalList.removeChild(signalList.lastChild);
+
+  // Alerts
+  const alertList = document.getElementById('alertList');
+  const alerts = SIM.intersections.filter(i => i.density > 0.6).sort((a, b) => b.density - a.density).slice(0, 5);
+  while (alertList.children.length < alerts.length) {
+    const d = document.createElement('div');
+    d.className = 'rounded-lg px-3 py-2';
+    d.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i><span class="text-xs font-mono"></span></div>`;
+    alertList.appendChild(d);
+    lucide.createIcons({ attrs: { class: '' }, nameAttr: 'data-lucide' });
+  }
+  alerts.forEach((int, i) => {
+    const el = alertList.children[i];
+    const cls = int.density > 0.75 ? 'congestion-high' : 'congestion-med';
+    el.className = `rounded-lg px-3 py-2 ${cls}`;
+    el.querySelector('span').textContent = `${int.name}: density ${(int.density * 100).toFixed(0)}%`;
+  });
+  while (alertList.children.length > alerts.length) alertList.removeChild(alertList.lastChild);
+
+  // Throughput chart
+  renderBarChart('throughputChart', SIM.throughputHistory, SIM.fixedThroughputHistory);
+
+  // Update CO2 display in header
+  const impact = calculateEnvironmentalImpact();
+  document.getElementById('co2Saved').textContent = impact.co2Saved.toFixed(0);
+}
+
+function renderBarChart(containerId, data1, data2) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const maxVal = Math.max(...data1, ...data2, 1);
+  const count = data1.length;
+
+  while (container.children.length < count) {
+    const group = document.createElement('div');
+    group.className = 'flex gap-px items-end flex-1';
+    group.style.minWidth = '0';
+    group.innerHTML = `<div class="flex-1 rounded-t transition-all" style="background: var(--primary);"></div><div class="flex-1 rounded-t transition-all" style="background: var(--secondary); opacity: 0.5;"></div>`;
+    container.appendChild(group);
+  }
+  while (container.children.length > count) container.removeChild(container.lastChild);
+
+  for (let i = 0; i < count; i++) {
+    const group = container.children[i];
+    group.children[0].style.height = ((data1[i] / maxVal) * 100) + '%';
+    group.children[1].style.height = ((data2[i] / maxVal) * 100) + '%';
+  }
+}
+
+// Detection tab
+function renderDetection() {
+  const canvas = document.getElementById('detectionCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  ctx.fillStyle = '#1a1f35';
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.strokeStyle = '#2a3456';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < h; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  ctx.fillStyle = '#252d48';
+  ctx.fillRect(0, h * 0.4, w, h * 0.2);
+  ctx.fillRect(w * 0.4, 0, w * 0.2, h);
+
+  ctx.setLineDash([10, 10]);
+  ctx.strokeStyle = '#4a5578';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h * 0.5); ctx.lineTo(w, h * 0.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(w * 0.5, 0); ctx.lineTo(w * 0.5, h); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const int = SIM.intersections[0];
+  const vCount = int.vehicles;
+  const seed = SIM.tick;
+
+  for (let v = 0; v < Math.min(vCount, 25); v++) {
+    const pseudo = ((seed * 31 + v * 137) % 1000) / 1000;
+    const pseudo2 = ((seed * 17 + v * 89) % 1000) / 1000;
+    const type = pseudo < 0.7 ? 'car' : pseudo < 0.85 ? 'truck' : 'bike';
+
+    let vx, vy, vw, vh;
+    if (v % 2 === 0) {
+      vx = (pseudo * w + SIM.tick * (2 + v * 0.3)) % w;
+      vy = h * 0.4 + pseudo2 * h * 0.16;
+      vw = type === 'truck' ? 36 : type === 'car' ? 24 : 14;
+      vh = type === 'truck' ? 16 : type === 'car' ? 12 : 8;
+    } else {
+      vx = w * 0.4 + pseudo2 * w * 0.16;
+      vy = (pseudo * h + SIM.tick * (1.5 + v * 0.2)) % h;
+      vw = type === 'truck' ? 16 : type === 'car' ? 12 : 8;
+      vh = type === 'truck' ? 36 : type === 'car' ? 24 : 14;
+    }
+
+    const colors = { car: '#06d6a0', truck: '#f77f00', bike: '#a78bfa' };
+    ctx.fillStyle = colors[type];
+    ctx.fillRect(vx, vy, vw, vh);
+
+    ctx.strokeStyle = colors[type];
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vx - 4, vy - 4, vw + 8, vh + 8);
+
+    const conf = (0.82 + pseudo * 0.17).toFixed(2);
+    ctx.fillStyle = '#00000088';
+    ctx.fillRect(vx - 4, vy - 16, 44, 12);
+    ctx.fillStyle = colors[type];
+    ctx.font = '9px JetBrains Mono';
+    ctx.fillText(`${type} ${conf}`, vx - 2, vy - 6);
+  }
+
+  document.getElementById('detCount').textContent = vCount;
+  document.getElementById('detCars').textContent = int.cars;
+  document.getElementById('detTrucks').textContent = int.trucks;
+  document.getElementById('detBikes').textContent = int.bikes;
+  document.getElementById('detFps').textContent = 28 + Math.floor(Math.random() * 5);
+
+  renderHeatmap();
+  renderConfidenceBars();
+}
+
+function renderHeatmap() {
+  const canvas = document.getElementById('heatmapCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(0, 0, w, h);
+
+  const cellW = w / GRID, cellH = h / GRID;
+  SIM.intersections.forEach((int, i) => {
+    const row = Math.floor(i / GRID), col = i % GRID;
+    const alpha = int.density;
+    const r = Math.floor(239 * alpha + 6 * (1 - alpha));
+    const g = Math.floor(68 * alpha + 214 * (1 - alpha));
+    const b = Math.floor(68 * alpha + 160 * (1 - alpha));
+    ctx.fillStyle = `rgba(${r},${g},${b},${0.3 + alpha * 0.6})`;
+    ctx.fillRect(col * cellW + 2, row * cellH + 2, cellW - 4, cellH - 4);
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '11px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(int.name, col * cellW + cellW / 2, row * cellH + cellH / 2 + 4);
+  });
+}
+
+function renderConfidenceBars() {
+  const container = document.getElementById('confidenceBars');
+  if (!container) return;
+  const types = [
+    { name: 'Car Detection', val: 0.91 + Math.random() * 0.06, color: 'var(--primary)' },
+    { name: 'Truck Detection', val: 0.85 + Math.random() * 0.08, color: 'var(--secondary)' },
+    { name: 'Bike Detection', val: 0.78 + Math.random() * 0.1, color: '#a78bfa' },
+    { name: 'Density Estimation', val: 0.88 + Math.random() * 0.07, color: 'var(--text)' },
+  ];
+
+  while (container.children.length < types.length) {
+    const d = document.createElement('div');
+    d.innerHTML = `<div class="flex justify-between text-xs mb-1"><span></span><span class="font-mono"></span></div><div class="h-2 rounded-full" style="background: var(--bg);"><div class="h-full rounded-full transition-all"></div></div>`;
+    container.appendChild(d);
+  }
+
+  types.forEach((t, i) => {
+    const el = container.children[i];
+    el.querySelector('span:first-child').textContent = t.name;
+    el.querySelector('span:first-child').style.color = '#94a3b8';
+    el.querySelector('span:last-child').textContent = (t.val * 100).toFixed(1) + '%';
+    el.querySelector('span:last-child').style.color = t.color;
+    const bar = el.querySelector('.h-full');
+    bar.style.width = (t.val * 100) + '%';
+    bar.style.background = t.color;
+  });
+}
+
+// Signals tab
+function renderSignals() {
+  const container = document.getElementById('signalCards');
+  if (!container) return;
+
+  SIM.intersections.forEach((int, i) => {
+    let card = container.children[i];
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'rounded-xl p-4 card-hover';
+      card.style.background = 'var(--surface)';
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-bold font-mono" style="color: var(--text);"></span>
+          <div class="flex gap-1">
+            <span class="w-3 h-3 rounded-full"></span>
+            <span class="w-3 h-3 rounded-full"></span>
+            <span class="w-3 h-3 rounded-full"></span>
+          </div>
+        </div>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between"><span style="color: #64748b;">Density</span><span class="font-mono"></span></div>
+          <div class="h-1.5 rounded-full" style="background: var(--bg);"><div class="h-full rounded-full transition-all"></div></div>
+          <div class="flex justify-between"><span style="color: #64748b;">Green Phase</span><span class="font-mono"></span></div>
+          <div class="flex justify-between"><span style="color: #64748b;">Wait Time</span><span class="font-mono"></span></div>
+          <div class="flex justify-between"><span style="color: #64748b;">Mode</span><span class="font-mono text-xs px-1.5 py-0.5 rounded"></span></div>
+        </div>
+      `;
+      container.appendChild(card);
+    }
+
+    card.querySelector('.text-sm').textContent = int.name;
+    const lights = card.querySelectorAll('.w-3.h-3');
+    lights[0].className = 'w-3 h-3 rounded-full ' + (int.phase === 2 ? 'light-red signal-active' : 'light-off');
+    lights[1].className = 'w-3 h-3 rounded-full ' + (int.phase === 1 ? 'light-yellow signal-active' : 'light-off');
+    lights[2].className = 'w-3 h-3 rounded-full ' + (int.phase === 0 ? 'light-green signal-active' : 'light-off');
+
+    const spans = card.querySelectorAll('.font-mono');
+    spans[1].textContent = (int.density * 100).toFixed(0) + '%';
+    spans[1].style.color = int.density < 0.4 ? 'var(--primary)' : int.density < 0.65 ? 'var(--secondary)' : '#ef4444';
+
+    const densBar = card.querySelector('.h-full');
+    densBar.style.width = (int.density * 100) + '%';
+    densBar.style.background = int.density < 0.4 ? 'var(--primary)' : int.density < 0.65 ? 'var(--secondary)' : '#ef4444';
+
+    spans[2].textContent = int.adaptiveGreen + 's';
+    spans[2].style.color = 'var(--primary)';
+    spans[3].textContent = int.waitTime.toFixed(1) + 's';
+    spans[3].style.color = 'var(--text)';
+
+    const badge = spans[4];
+    if (int.adaptiveActive) {
+      badge.textContent = 'ADAPTIVE';
+      badge.style.background = '#a78bfa22';
+      badge.style.color = '#a78bfa';
+    } else {
+      badge.textContent = 'STANDARD';
+      badge.style.background = '#06d6a018';
+      badge.style.color = 'var(--primary)';
+    }
+  });
+
+  renderTimingComparison();
+}
+
+function renderTimingComparison() {
+  const fixedContainer = document.getElementById('fixedTimingBars');
+  const adaptiveContainer = document.getElementById('adaptiveTimingBars');
+  if (!fixedContainer || !adaptiveContainer) return;
+
+  const show = SIM.intersections.slice(0, 8);
+  [fixedContainer, adaptiveContainer].forEach((cont, ci) => {
+    while (cont.children.length < show.length) {
+      const d = document.createElement('div');
+      d.className = 'flex items-center gap-2';
+      d.innerHTML = `<span class="text-[10px] font-mono w-6" style="color: #64748b;"></span><div class="flex-1 h-3 rounded-full" style="background: var(--bg);"><div class="h-full rounded-full transition-all"></div></div><span class="text-[10px] font-mono w-8 text-right"></span>`;
+      cont.appendChild(d);
+    }
+    show.forEach((int, i) => {
+      const el = cont.children[i];
+      el.children[0].textContent = int.name;
+      const val = ci === 0 ? int.fixedGreen : int.adaptiveGreen;
+      const maxG = 60;
+      el.querySelector('.h-full').style.width = ((val / maxG) * 100) + '%';
+      el.querySelector('.h-full').style.background = ci === 0 ? 'var(--secondary)' : 'var(--primary)';
+      el.children[2].textContent = val + 's';
+      el.children[2].style.color = ci === 0 ? 'var(--secondary)' : 'var(--primary)';
+    });
+  });
+}
+
+// Prediction tab
+function renderPrediction() {
+  const container = document.getElementById('forecastChart');
+  if (!container || SIM.forecastData.length < 2) return;
+
+  const w = container.clientWidth || 500;
+  const h = 200;
+  const pad = 30;
+
+  const maxVal = Math.max(...SIM.forecastData, ...SIM.actualData, 0.01);
+  const points = SIM.actualData.length;
+
+  let actualPath = '';
+  let forecastPath = '';
+  let bandPath = '';
+
+  SIM.actualData.forEach((val, i) => {
+    const x = pad + (i / (points - 1 || 1)) * (w - pad * 2);
+    const y = h - pad - (val / maxVal) * (h - pad * 2);
+    actualPath += (i === 0 ? 'M' : 'L') + `${x},${y}`;
+  });
+
+  SIM.forecastData.forEach((val, i) => {
+    const x = pad + (i / (points - 1 || 1)) * (w - pad * 2);
+    const y = h - pad - (val / maxVal) * (h - pad * 2);
+    forecastPath += (i === 0 ? 'M' : 'L') + `${x},${y}`;
+
+    const upper = h - pad - (Math.min(val + 0.1, 1) / maxVal) * (h - pad * 2);
+    const lower = h - pad - (Math.max(val - 0.1, 0) / maxVal) * (h - pad * 2);
+    bandPath += (i === 0 ? 'M' : 'L') + `${x},${upper}`;
+  });
+
+  for (let i = points - 1; i >= 0; i--) {
+    const x = pad + (i / (points - 1 || 1)) * (w - pad * 2);
+    const val = SIM.forecastData[i];
+    const lower = h - pad - (Math.max(val - 0.1, 0) / maxVal) * (h - pad * 2);
+    bandPath += `L${x},${lower}`;
+  }
+  bandPath += 'Z';
+
+  container.innerHTML = `
+    <svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}">
+      <path d="${bandPath}" fill="var(--secondary)" opacity="0.12"/>
+      <path d="${actualPath}" fill="none" stroke="#64748b" stroke-width="2"/>
+      <path d="${forecastPath}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="6 3"/>
+    </svg>
+  `;
+
+  const accuracy = 85 + Math.sin(SIM.tick * 0.05) * 5 + Math.random() * 3;
+  const rmse = 0.08 + Math.random() * 0.04;
+  const precision = 82 + Math.random() * 8;
+  const respTime = 12 + Math.floor(Math.random() * 8);
+
+  document.getElementById('predAccuracy').textContent = accuracy.toFixed(1) + '%';
+  document.getElementById('predRmse').textContent = rmse.toFixed(3);
+  document.getElementById('predPrecision').textContent = precision.toFixed(1) + '%';
+  document.getElementById('predResponse').textContent = respTime + 'ms';
+
+  const hotspotList = document.getElementById('hotspotList');
+  const hotspots = [...SIM.intersections].sort((a, b) => b.density - a.density).slice(0, 4);
+
+  while (hotspotList.children.length < hotspots.length) {
+    const d = document.createElement('div');
+    d.className = 'flex items-center justify-between rounded-lg px-3 py-2';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full"></span><span class="text-xs font-mono"></span></div><span class="text-xs font-mono"></span>`;
+    hotspotList.appendChild(d);
+  }
+  hotspots.forEach((int, i) => {
+    const el = hotspotList.children[i];
+    const dot = el.querySelector('.w-2');
+    dot.style.background = int.density > 0.75 ? '#ef4444' : int.density > 0.5 ? '#eab308' : '#06d6a0';
+    el.querySelectorAll('.font-mono')[0].textContent = int.name + ' — ' + (int.density > 0.75 ? 'Critical' : int.density > 0.5 ? 'Warning' : 'Normal');
+    el.querySelectorAll('.font-mono')[0].style.color = 'var(--text)';
+    el.querySelectorAll('.font-mono')[1].textContent = (int.density * 100).toFixed(0) + '%';
+    el.querySelectorAll('.font-mono')[1].style.color = int.density > 0.75 ? '#ef4444' : int.density > 0.5 ? '#eab308' : 'var(--primary)';
+  });
+  while (hotspotList.children.length > hotspots.length) hotspotList.removeChild(hotspotList.lastChild);
+}
+
+// Emergency tab
+function renderEmergency() {
+  const container = document.getElementById('emergencyVehicles');
+  const vehicles = SIM.emergencyVehicles.slice(0, 5);
+
+  while (container.children.length < vehicles.length) {
+    const d = document.createElement('div');
+    d.className = 'p-3 rounded-lg emergency-active';
+    d.style.background = '#ff174418';
+    d.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-mono font-bold" style="color: #ff1744;"></span>
+        <span class="text-xs font-mono" style="color: #ff1744;"></span>
+      </div>
+      <div class="space-y-1 text-xs">
+        <div class="flex justify-between"><span style="color: #94a3b8;">Route</span><span class="font-mono" style="color: var(--text);"></span></div>
+        <div class="flex justify-between"><span style="color: #94a3b8;">Status</span><span class="font-mono" style="color: var(--success);"></span></div>
+        <div class="flex justify-between"><span style="color: #94a3b8;">Response Time</span><span class="font-mono" style="color: var(--secondary);"></span></div>
+      </div>
+    `;
+    container.appendChild(d);
+  }
+
+  vehicles.forEach((em, i) => {
+    const el = container.children[i];
+    el.children[0].children[0].textContent = `🚨 Vehicle #${em.id}`;
+    el.children[0].children[1].textContent = em.status.toUpperCase();
+    const route = em.getRoute();
+    el.children[1].children[0].children[1].textContent = route.map(r => INTERSECTION_NAMES[r]).join(' → ');
+    el.children[1].children[1].children[1].textContent = em.status;
+    const responseTime = (SIM.tick - em.createdAt) * 2;
+    el.children[1].children[2].children[1].textContent = responseTime + 'ms';
+  });
+
+  while (container.children.length > vehicles.length) container.removeChild(container.lastChild);
+
+  document.getElementById('emergencyCount').textContent = SIM.emergencyCount;
+  const avgTime = SIM.emergencyCount > 0 ? (SIM.emergencyTotalTime / SIM.emergencyCount).toFixed(0) : 0;
+  document.getElementById('emergencyAvgTime').textContent = avgTime + 'ms';
+  document.getElementById('emergencyOverrides').textContent = SIM.emergencyOverrides;
+  document.getElementById('emergencyStatus').textContent = SIM.emergencyVehicles.length > 0 ? `🚨 ${SIM.emergencyVehicles.length} vehicle(s) active` : 'No active emergencies';
+  document.getElementById('emergencyStatus').style.color = SIM.emergencyVehicles.length > 0 ? '#ff1744' : 'var(--success)';
+
+  const routeContainer = document.getElementById('routeSuggestions');
+  const routes = suggestRoutes();
+  while (routeContainer.children.length < routes.length) {
+    const d = document.createElement('div');
+    d.className = 'p-2 rounded-lg';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `<div class="flex justify-between"><span class="font-mono text-xs"></span><span class="text-xs" style="color: #94a3b8;"></span></div>`;
+    routeContainer.appendChild(d);
+  }
+  routes.forEach((rt, i) => {
+    const el = routeContainer.children[i];
+    el.children[0].children[0].textContent = rt.name + ' • ' + rt.time + 'min';
+    el.children[0].children[0].style.color = 'var(--text)';
+    el.children[0].children[1].textContent = rt.density + '% density';
+  });
+}
+
+// Performance tab
+function renderPerformance() {
+  const avgWait = SIM.intersections.reduce((s, i) => s + i.waitTime, 0) / INTERSECTION_COUNT;
+  const avgFixedWait = SIM.intersections.reduce((s, i) => s + i.fixedWaitTime, 0) / INTERSECTION_COUNT;
+  const waitReduction = Math.max(0, ((avgFixedWait - avgWait) / avgFixedWait) * 100);
+
+  document.getElementById('perfWaitRed').textContent = waitReduction.toFixed(1) + '%';
+  document.getElementById('perfCongAcc').textContent = (87 + Math.random() * 5).toFixed(1) + '%';
+  document.getElementById('perfResp').textContent = (14 + Math.floor(Math.random() * 6)) + 'ms';
+  document.getElementById('perfOptCount').textContent = SIM.totalOptimizations;
+
+  renderBarChart('perfCompChart', SIM.throughputHistory, SIM.fixedThroughputHistory);
+
+  const logContainer = document.getElementById('eventLog');
+  while (logContainer.children.length < SIM.events.length) {
+    const d = document.createElement('div');
+    d.className = 'py-1 border-b';
+    d.style.borderColor = '#1e293b';
+    logContainer.appendChild(d);
+  }
+  while (logContainer.children.length > SIM.events.length) logContainer.removeChild(logContainer.lastChild);
+  SIM.events.forEach((evt, i) => {
+    logContainer.children[i].innerHTML = `<span style="color: var(--primary);">[${evt.time}]</span> ${evt.msg}`;
+  });
+}
+
+// Learning tab
+function renderLearning() {
+  document.getElementById('modelAccuracy').textContent = SIM.modelAccuracy.toFixed(1) + '%';
+  document.getElementById('patternsLearned').textContent = SIM.patternsLearned;
+
+  const container = document.getElementById('learningChart');
+  if (!container) return;
+  const maxAcc = 100;
+  const count = SIM.trainingEpochs.length;
+
+  while (container.children.length < count) {
+    const bar = document.createElement('div');
+    bar.style.flex = '1';
+    bar.style.minWidth = '0';
+    bar.style.background = 'var(--primary)';
+    bar.style.borderRadius = '3px 3px 0 0';
+    bar.style.transition = 'height 0.3s ease';
+    container.appendChild(bar);
+  }
+
+  SIM.trainingEpochs.forEach((acc, i) => {
+    const bar = container.children[i];
+    bar.style.height = ((acc / maxAcc) * 100) + '%';
+  });
+
+  while (container.children.length > count) container.removeChild(container.lastChild);
+
+  const metricsContainer = document.getElementById('learningMetrics');
+  const metrics = [
+    { label: 'Layers', value: Math.floor(SIM.patternsLearned / 10) + 1 },
+    { label: 'Params', value: Math.floor(SIM.modelAccuracy * 80) + 'K' },
+    { label: 'Loss', value: (100 - SIM.modelAccuracy).toFixed(2) + '%' },
+  ];
+
+  while (metricsContainer.children.length < metrics.length) {
+    const d = document.createElement('div');
+    d.className = 'flex justify-between rounded-lg p-2';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `<span class="text-xs" style="color: #64748b;"></span><span class="text-xs font-mono" style="color: var(--primary);"></span>`;
+    metricsContainer.appendChild(d);
+  }
+
+  metrics.forEach((m, i) => {
+    const el = metricsContainer.children[i];
+    el.children[0].textContent = m.label;
+    el.children[1].textContent = m.value;
+  });
+
+  const insightsContainer = document.getElementById('dataInsights');
+  const insights = [
+    'Peak hours: 8-9 AM, 5-6 PM',
+    'Avg vehicles/min: ' + Math.floor(SIM.intersections.reduce((s, i) => s + i.vehicles, 0) / 16),
+    'Network efficiency: ' + (75 + SIM.modelAccuracy * 0.3).toFixed(0) + '%',
+  ];
+
+  while (insightsContainer.children.length < insights.length) {
+    const d = document.createElement('div');
+    d.className = 'text-xs p-2 rounded-lg';
+    d.style.background = 'var(--bg)';
+    d.style.color = '#94a3b8';
+    insightsContainer.appendChild(d);
+  }
+
+  insights.forEach((ins, i) => {
+    insightsContainer.children[i].textContent = ins;
+  });
+}
+
+// AI Explanation tab
+function renderExplanation() {
+  const container = document.getElementById('decisionExplanation');
+  if (!container || SIM.decisionLog.length === 0) return;
+
+  while (container.children.length < Math.min(SIM.decisionLog.length, 8)) {
+    const d = document.createElement('div');
+    d.className = 'p-3 rounded-lg';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <span style="color: var(--primary);">Loading...</span>
+        <span style="color: #94a3b8; font-size: 11px;">--s</span>
+      </div>
+      <div class="text-[11px]" style="color: #94a3b8;">
+        <div>Density: --% → Green: --s</div>
+        <div>Reason: --</div>
+      </div>
+    `;
+    container.appendChild(d);
+  }
+
+  SIM.decisionLog.slice(0, 8).forEach((dec, i) => {
+    const el = container.children[i];
+    const header = el.querySelector('div').children[0];
+    header.textContent = `Signal ${dec.intersection} Optimized`;
+    header.style.color = 'var(--primary)';
+    const time = el.querySelector('span:last-child');
+    time.textContent = dec.time;
+    const details = el.querySelector('.text-\\[11px\\]');
+    details.innerHTML = `
+      <div>Density: ${dec.density}% → Green: ${dec.newGreen}s (was ${dec.oldGreen}s)</div>
+      <div>Reason: ${dec.reason}</div>
+    `;
+  });
+
+  // AI Model Health
+  const confidence = 60 + SIM.modelAccuracy * 0.4 + Math.random() * 10;
+  document.getElementById('modelConfidence').textContent = confidence.toFixed(1) + '%';
+  document.getElementById('confidenceBar').style.width = confidence + '%';
+  document.getElementById('optimizationRate').textContent = (SIM.totalOptimizations / Math.max(1, SIM.tick / 10)).toFixed(1) + '/min';
+  document.getElementById('avgAccuracy').textContent = (SIM.modelAccuracy + 10).toFixed(1) + '%';
+
+  // Top decisions
+  const topDecisionsContainer = document.getElementById('topDecisions');
+  const topDecisions = SIM.decisionLog.slice(0, 3);
+  
+  while (topDecisionsContainer.children.length < topDecisions.length) {
+    const d = document.createElement('div');
+    d.className = 'flex items-center justify-between p-2 rounded-lg';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `<span class="text-[11px]"></span><span class="text-[11px] font-mono" style="color: var(--primary);"></span>`;
+    topDecisionsContainer.appendChild(d);
+  }
+
+  topDecisions.forEach((dec, i) => {
+    const el = topDecisionsContainer.children[i];
+    el.children[0].textContent = `${dec.intersection}: +${Math.abs(dec.newGreen - dec.oldGreen)}s`;
+    el.children[0].style.color = '#94a3b8';
+    el.children[1].textContent = dec.density + '%';
+  });
+
+  while (topDecisionsContainer.children.length > topDecisions.length) topDecisionsContainer.removeChild(topDecisionsContainer.lastChild);
+}
+
+// Environmental Impact tab
+function renderEnvironmental() {
+  const impact = calculateEnvironmentalImpact();
+  
+  document.getElementById('co2Reduction').textContent = impact.co2Saved.toFixed(1);
+  document.getElementById('fuelSaved').textContent = impact.fuelSaved.toFixed(2);
+  document.getElementById('treesEquiv').textContent = (impact.co2Saved / 20).toFixed(1); // 1 tree absorbs ~20kg CO2/year
+  document.getElementById('idleReduction').textContent = impact.idleTimeReduction.toFixed(0) + '%';
+  document.getElementById('speedIncrease').textContent = Math.floor(impact.avgSpeed) + ' km/h';
+
+  // Emission chart
+  const canvas = document.getElementById('emissionChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  ctx.fillStyle = 'var(--bg)';
+  ctx.fillRect(0, 0, w, h);
+
+  // Simple line chart
+  const dataPoints = 20;
+  const maxEmission = 100;
+  let adaptivePath = 'M0,' + h;
+  let fixedPath = 'M0,' + h;
+
+  for (let i = 0; i < dataPoints; i++) {
+    const x = (i / dataPoints) * w;
+    const adaptiveVal = 50 + Math.sin(i * 0.5) * 15;
+    const fixedVal = 70 + Math.sin(i * 0.5) * 20;
+    const yAdaptive = h - (adaptiveVal / maxEmission) * h;
+    const yFixed = h - (fixedVal / maxEmission) * h;
+    adaptivePath += `L${x},${yAdaptive}`;
+    fixedPath += `L${x},${yFixed}`;
+  }
+  adaptivePath += `L${w},${h}Z`;
+  fixedPath += `L${w},${h}Z`;
+
+  ctx.fillStyle = 'rgba(0, 217, 255, 0.1)';
+  ctx.beginPath();
+  for (let i = 0; i < dataPoints; i++) {
+    const x = (i / dataPoints) * w;
+    const adaptiveVal = 50 + Math.sin(i * 0.5) * 15;
+    const y = h - (adaptiveVal / maxEmission) * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.fill();
+
+  ctx.strokeStyle = 'var(--primary)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < dataPoints; i++) {
+    const x = (i / dataPoints) * w;
+    const adaptiveVal = 50 + Math.sin(i * 0.5) * 15;
+    const y = h - (adaptiveVal / maxEmission) * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255, 107, 53, 0.5)';
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  for (let i = 0; i < dataPoints; i++) {
+    const x = (i / dataPoints) * w;
+    const fixedVal = 70 + Math.sin(i * 0.5) * 20;
+    const y = h - (fixedVal / maxEmission) * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '10px JetBrains Mono';
+  ctx.fillText('Adaptive', 10, 15);
+  ctx.fillStyle = 'rgba(255, 107, 53, 0.7)';
+  ctx.fillText('Fixed Timing', w - 80, 15);
+}
+
+// ============================================================
+// TAB NAVIGATION
+// ============================================================
+
+let activeTab = 'overview';
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.color = '#64748b';
+    });
+    btn.classList.add('active');
+    btn.style.color = 'var(--primary)';
+
+    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
+    document.getElementById('tab-' + activeTab).classList.remove('hidden');
+  });
+});
+
+// Control handlers
+document.getElementById('trafficSpeedSlider').addEventListener('input', (e) => {
+  SIM.trafficSpeedMultiplier = parseFloat(e.target.value);
+  document.getElementById('speedValue').textContent = SIM.trafficSpeedMultiplier.toFixed(1) + 'x';
+});
+
+document.getElementById('weatherSelect').addEventListener('change', (e) => {
+  SIM.weather = e.target.value;
+  SIM.weatherFactor = WEATHER_CONFIG[SIM.weather].congestionFactor;
+  const config = WEATHER_CONFIG[SIM.weather];
+  document.getElementById('weatherIcon').textContent = config.icon;
+  document.getElementById('weatherLabel').textContent = config.name;
+});
+
+document.getElementById('intensityLowBtn').addEventListener('click', () => {
+  SIM.trafficIntensity = 'low';
+  updateIntensityButtons();
+});
+
+document.getElementById('intensityMedBtn').addEventListener('click', () => {
+  SIM.trafficIntensity = 'medium';
+  updateIntensityButtons();
+});
+
+document.getElementById('intensityHighBtn').addEventListener('click', () => {
+  SIM.trafficIntensity = 'high';
+  updateIntensityButtons();
+});
+
+function updateIntensityButtons() {
+  const btns = [document.getElementById('intensityLowBtn'), document.getElementById('intensityMedBtn'), document.getElementById('intensityHighBtn')];
+  btns.forEach(b => b.style.opacity = '0.5');
+  if (SIM.trafficIntensity === 'low') btns[0].style.opacity = '1';
+  else if (SIM.trafficIntensity === 'medium') btns[1].style.opacity = '1';
+  else btns[2].style.opacity = '1';
+}
+
+// Toggle sim
+document.getElementById('toggleSimBtn').addEventListener('click', () => {
+  SIM.running = !SIM.running;
+  document.getElementById('toggleLabel').textContent = SIM.running ? 'Pause' : 'Resume';
+  document.getElementById('simStatus').textContent = SIM.running ? 'ACTIVE' : 'PAUSED';
+});
+
+// Trigger emergency button
+document.getElementById('triggerEmergencyBtn').addEventListener('click', () => {
+  triggerEmergencyVehicle();
+});
+
+// Toggle learning mode
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'l' || e.key === 'L') {
+    SIM.learningMode = !SIM.learningMode;
+    const badge = document.getElementById('learningBadge');
+    if (SIM.learningMode) {
+      badge.style.display = 'inline-block';
+      addEvent('📚 Learning mode activated (Press L to toggle)');
+    } else {
+      badge.style.display = 'none';
+      addEvent('Learning mode deactivated');
+    }
+  }
+});
+
+// ============================================================
+// ELEMENT SDK
+// ============================================================
+
+const defaultConfig = {
+  dashboard_title: 'IntelliFlow AI',
+  city_name: 'Metro City',
+  background_color: '#0a0e27',
+  surface_color: '#141d3e',
+  text_color: '#e2e8f0',
+  primary_color: '#00d9ff',
+  secondary_color: '#ff6b35',
+  font_family: 'Outfit',
+  font_size: 14,
+};
+
+function applyConfig(config) {
+  const bg = config.background_color || defaultConfig.background_color;
+  const surface = config.surface_color || defaultConfig.surface_color;
+  const text = config.text_color || defaultConfig.text_color;
+  const primary = config.primary_color || defaultConfig.primary_color;
+  const secondary = config.secondary_color || defaultConfig.secondary_color;
+  const font = config.font_family || defaultConfig.font_family;
+  const fontSize = config.font_size || defaultConfig.font_size;
+
+  document.documentElement.style.setProperty('--bg', bg);
+  document.documentElement.style.setProperty('--surface', surface);
+  document.documentElement.style.setProperty('--text', text);
+  document.documentElement.style.setProperty('--primary', primary);
+  document.documentElement.style.setProperty('--secondary', secondary);
+
+  document.body.style.fontFamily = `${font}, Outfit, sans-serif`;
+  document.body.style.fontSize = fontSize + 'px';
+  document.body.style.background = bg;
+  document.body.style.color = text;
+
+  const app = document.getElementById('app');
+  if (app) app.style.background = bg;
+
+  const title = config.dashboard_title || defaultConfig.dashboard_title;
+  const city = config.city_name || defaultConfig.city_name;
+  document.getElementById('dashTitle').textContent = title;
+  document.getElementById('dashTitle').style.color = text;
+  document.getElementById('dashTitle').style.fontFamily = `${font}, Outfit, sans-serif`;
+  document.getElementById('dashTitle').style.fontSize = (fontSize * 1.3) + 'px';
+  document.getElementById('cityLabel').textContent = city + ' • AI Adaptive System';
+  document.getElementById('cityLabel').style.color = secondary;
+  document.getElementById('cityLabel').style.fontFamily = `JetBrains Mono, ${font}, monospace`;
+}
+
+if (window.elementSdk) {
+  window.elementSdk.init({
+    defaultConfig,
+    onConfigChange: async (config) => {
+      applyConfig(config);
+    },
+    mapToCapabilities: (config) => ({
+      recolorables: [
+        { get: () => config.background_color || defaultConfig.background_color, set: (v) => { config.background_color = v; window.elementSdk.setConfig({ background_color: v }); }},
+        { get: () => config.surface_color || defaultConfig.surface_color, set: (v) => { config.surface_color = v; window.elementSdk.setConfig({ surface_color: v }); }},
+        { get: () => config.text_color || defaultConfig.text_color, set: (v) => { config.text_color = v; window.elementSdk.setConfig({ text_color: v }); }},
+        { get: () => config.primary_color || defaultConfig.primary_color, set: (v) => { config.primary_color = v; window.elementSdk.setConfig({ primary_color: v }); }},
+        { get: () => config.secondary_color || defaultConfig.secondary_color, set: (v) => { config.secondary_color = v; window.elementSdk.setConfig({ secondary_color: v }); }},
+      ],
+      borderables: [],
+      fontEditable: {
+        get: () => config.font_family || defaultConfig.font_family,
+        set: (v) => { config.font_family = v; window.elementSdk.setConfig({ font_family: v }); }
+      },
+      fontSizeable: {
+        get: () => config.font_size || defaultConfig.font_size,
+        set: (v) => { config.font_size = v; window.elementSdk.setConfig({ font_size: v }); }
+      }
+    }),
+    mapToEditPanelValues: (config) => new Map([
+      ['dashboard_title', config.dashboard_title || defaultConfig.dashboard_title],
+      ['city_name', config.city_name || defaultConfig.city_name],
+    ])
+  });
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+
+initIntersections();
+addEvent('System initialized — AI traffic optimizer online');
+addEvent('16 intersections connected to adaptive network');
+updateIntensityButtons();
+
+function mainLoop() {
+  simStep();
+
+  if (activeTab === 'overview') renderOverview();
+  else if (activeTab === 'detection') renderDetection();
+  else if (activeTab === 'signals') renderSignals();
+  else if (activeTab === 'emergency') renderEmergency();
+  else if (activeTab === 'prediction') renderPrediction();
+  else if (activeTab === 'performance') renderPerformance();
+  else if (activeTab === 'learning') renderLearning();
+  else if (activeTab === 'explanation') renderExplanation();
+  else if (activeTab === 'environmental') renderEnvironmental();
+
+  setTimeout(mainLoop, 400);
+}
+
+applyConfig(defaultConfig);
+lucide.createIcons();
+mainLoop();
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IntelliFlow AI – Adaptive Traffic Signal Optimization</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Outfit:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+  html, body { height: 100%; margin: 0; padding: 0; }
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0e27;
+    --surface: #141d3e;
+    --text: #e2e8f0;
+    --primary: #00d9ff;
+    --secondary: #ff6b35;
+    --emergency: #ff1744;
+    --success: #06d6a0;
+  }
+
+  body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2a3456; border-radius: 3px; }
+
+  /* Traffic light glow */
+  .light-red { background: #ef4444; box-shadow: 0 0 12px #ef444488; }
+  .light-yellow { background: #eab308; box-shadow: 0 0 12px #eab30888; }
+  .light-green { background: #22c55e; box-shadow: 0 0 12px #22c55e88; }
+  .light-off { background: #1e293b; }
+  .light-emergency { background: #ff1744; box-shadow: 0 0 20px #ff174488; }
+
+  /* Emergency pulse */
+  @keyframes emergencyPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .emergency-active { animation: emergencyPulse 0.8s ease-in-out infinite; }
+
+  /* Pulse animation for active signals */
+  @keyframes signalPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .signal-active { animation: signalPulse 1.5s ease-in-out infinite; }
+
+  /* Grid road animation */
+  @keyframes moveRight { from { transform: translateX(-20px); } to { transform: translateX(20px); } }
+  @keyframes moveDown { from { transform: translateY(-20px); } to { transform: translateY(20px); } }
+  @keyframes moveLeft { from { transform: translateX(20px); } to { transform: translateX(-20px); } }
+  @keyframes moveUp { from { transform: translateY(20px); } to { transform: translateY(-20px); } }
+
+  .vehicle-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    position: absolute;
+  }
+
+  /* Congestion heatmap gradient */
+  .congestion-low { background: linear-gradient(135deg, #06d6a022, #06d6a011); border-left: 3px solid #06d6a0; }
+  .congestion-med { background: linear-gradient(135deg, #eab30822, #eab30811); border-left: 3px solid #eab308; }
+  .congestion-high { background: linear-gradient(135deg, #ef444422, #ef444411); border-left: 3px solid #ef4444; }
+  .congestion-critical { background: linear-gradient(135deg, #ff174422, #ff174411); border-left: 3px solid #ff1744; }
+
+  /* Chart bar animation */
+  @keyframes barGrow { from { height: 0; } }
+  .bar-animate { animation: barGrow 0.6s ease-out; }
+
+  /* Card hover */
+  .card-hover { transition: transform 0.2s, box-shadow 0.2s; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 24px #00000044; }
+
+  /* Stagger fade in */
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeSlideIn 0.5s ease-out forwards; opacity: 0; }
+  .delay-1 { animation-delay: 0.1s; }
+  .delay-2 { animation-delay: 0.2s; }
+  .delay-3 { animation-delay: 0.3s; }
+  .delay-4 { animation-delay: 0.4s; }
+  .delay-5 { animation-delay: 0.5s; }
+
+  /* Canvas for detection viz */
+  .detection-canvas { image-rendering: pixelated; }
+
+  /* Tab styles */
+  .tab-btn { transition: all 0.2s; border-bottom: 2px solid transparent; }
+  .tab-btn.active { border-bottom-color: var(--primary); color: var(--primary); }
+
+  /* Intersection grid */
+  .intersection-cell {
+    width: 100%; aspect-ratio: 1;
+    border-radius: 4px; transition: all 0.3s;
+  }
+
+  /* Weather badge */
+  .weather-icon { font-size: 24px; }
+
+  /* Alert animations */
+  @keyframes slideIn {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .alert-slide { animation: slideIn 0.3s ease-out; }
+
+  /* Learning indicator */
+  @keyframes learning {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  .learning-active { animation: learning 1s ease-in-out infinite; }
+</style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <div id="app" class="h-full w-full" style="background: var(--bg);">
+   <!-- Emergency Alert Banner -->
+   <div id="emergencyBanner" class="hidden fixed top-0 left-0 right-0 z-[100] alert-slide" style="background: linear-gradient(90deg, #ff1744, #ff6e40); padding: 12px; text-align: center;">
+    <div class="flex items-center justify-center gap-2" style="color: white; font-weight: bold;">
+     <i data-lucide="alert-triangle" style="width:18px;height:18px;"></i> <span id="emergencyMsg">Emergency vehicle detected - Signal priority override active!</span>
+    </div>
+   </div><!-- Header -->
+   <header class="sticky top-0 z-40 border-b" style="background: var(--surface); border-color: #1e293b;">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
+     <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--primary);"><i data-lucide="radio-tower" style="width:20px;height:20px;color:#0a0e27;"></i>
+      </div>
+      <div>
+       <h1 id="dashTitle" class="text-lg font-bold leading-tight" style="color: var(--text);">IntelliFlow AI</h1>
+       <p id="cityLabel" class="text-xs font-mono" style="color: var(--secondary);">Metro City • AI Adaptive System</p>
+      </div>
+     </div>
+     <div class="flex items-center gap-3">
+      <!-- Weather indicator -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs" style="background: #1e3a8a22; color: #60a5fa;">
+       <span id="weatherIcon" class="weather-icon">☀️</span> <span id="weatherLabel">Clear</span>
+      </div><!-- Sim Status -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono learning-active" style="background: #00d9ff18; color: var(--primary);"><span class="w-2 h-2 rounded-full" style="background: var(--primary); animation: signalPulse 1.5s infinite;"></span> <span id="simStatus">ACTIVE</span>
+      </div><!-- Environmental Impact -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs" style="background: #10b98122; color: #10b981;">
+       <i data-lucide="leaf" style="width:14px;height:14px;"></i> <span id="co2Saved">0</span>kg CO₂
+      </div><!-- Learning mode -->
+      <div class="text-xs font-mono px-2 py-1 rounded" id="learningBadge" style="background: #06d6a018; color: #06d6a0; display: none;">
+       <i data-lucide="brain" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px;"></i>LEARNING
+      </div>
+      <div class="text-xs font-mono" style="color: #64748b;"><span id="simClock">00:00:00</span>
+      </div><button id="toggleSimBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all" style="background: var(--primary); color: #0a0e27;"> <i data-lucide="pause" style="width:14px;height:14px;display:inline;vertical-align:middle;"></i> <span id="toggleLabel">Pause</span> </button>
+     </div>
+    </div>
+   </header><!-- Navigation Tabs -->
+   <nav class="border-b" style="background: var(--surface); border-color: #1e293b;">
+    <div class="max-w-[1600px] mx-auto px-4 flex gap-1 overflow-x-auto"><button class="tab-btn active px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="overview" style="color: var(--primary);"> <i data-lucide="layout-dashboard" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Overview </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="detection" style="color: #64748b;"> <i data-lucide="scan" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Detection </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="signals" style="color: #64748b;"> <i data-lucide="traffic-cone" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Signals </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="emergency" style="color: #64748b;"> <i data-lucide="ambulance" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Emergency </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="prediction" style="color: #64748b;"> <i data-lucide="brain" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Prediction </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="performance" style="color: #64748b;"> <i data-lucide="bar-chart-3" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Performance </button> <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap" data-tab="learning" style="color: #64748b;"> <i data-lucide="zap" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i>Learning </button>
+    </div>
+   </nav><!-- Main Content -->
+   <main class="max-w-[1600px] mx-auto p-4"><!-- Tab: Overview -->
+    <div id="tab-overview" class="tab-content"><!-- KPI Row -->
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="rounded-xl p-4 card-hover fade-in delay-1" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Vehicles Detected</span> <i data-lucide="car" style="width:16px;height:16px;color:var(--primary);"></i>
+       </div>
+       <p id="kpiVehicles" class="text-2xl font-bold font-mono" style="color: var(--text);">0</p>
+       <div id="kpiVehiclesTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        +0% vs baseline
+       </div>
+      </div>
+      <div class="rounded-xl p-4 card-hover fade-in delay-2" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Avg Wait Time</span> <i data-lucide="clock" style="width:16px;height:16px;color:var(--secondary);"></i>
+       </div>
+       <p id="kpiWait" class="text-2xl font-bold font-mono" style="color: var(--text);">0s</p>
+       <div id="kpiWaitTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        -0% reduction
+       </div>
+      </div>
+      <div class="rounded-xl p-4 card-hover fade-in delay-3" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Congestion Index</span> <i data-lucide="activity" style="width:16px;height:16px;color:#ef4444;"></i>
+       </div>
+       <p id="kpiCongestion" class="text-2xl font-bold font-mono" style="color: var(--text);">0.0</p>
+       <div id="kpiCongTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        Low congestion
+       </div>
+      </div>
+      <div class="rounded-xl p-4 card-hover fade-in delay-4" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-2"><span class="text-xs font-medium" style="color: #64748b;">Throughput</span> <i data-lucide="zap" style="width:16px;height:16px;color:#a78bfa;"></i>
+       </div>
+       <p id="kpiThroughput" class="text-2xl font-bold font-mono" style="color: var(--text);">0/min</p>
+       <div id="kpiThroughTrend" class="text-xs mt-1 font-mono" style="color: var(--primary);">
+        +0% improvement
+       </div>
+      </div>
+     </div><!-- Control Panel: Traffic Speed & Scenario -->
+     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div class="rounded-xl p-3 fade-in delay-2" style="background: var(--surface);"><label class="text-xs font-medium block mb-2" style="color: var(--text);"> <i data-lucide="zap" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:6px;"></i>Traffic Speed Control </label>
+       <div class="flex items-center gap-2"><input type="range" id="trafficSpeedSlider" min="0.3" max="3" step="0.1" value="1" class="flex-1" style="cursor: pointer;"> <span id="speedValue" class="text-xs font-mono px-2 py-1 rounded" style="background: var(--bg); color: var(--primary);">1.0x</span>
+       </div>
+       <p class="text-[10px] mt-1" style="color: #64748b;">Adjust simulation speed</p>
+      </div>
+      <div class="rounded-xl p-3 fade-in delay-2" style="background: var(--surface);"><label class="text-xs font-medium block mb-2" style="color: var(--text);"> <i data-lucide="cloud" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:6px;"></i>Weather Scenario </label> <select id="weatherSelect" class="w-full px-2 py-1 rounded text-xs" style="background: var(--bg); color: var(--text); border: 1px solid #2a3456;"> <option value="clear">☀️ Clear</option> <option value="rainy">🌧️ Rainy (+30% traffic)</option> <option value="foggy">🌫️ Foggy (+50% traffic)</option> <option value="snowy">❄️ Snowy (+80% traffic)</option> </select>
+      </div>
+      <div class="rounded-xl p-3 fade-in delay-2" style="background: var(--surface);"><label class="text-xs font-medium block mb-2" style="color: var(--text);"> <i data-lucide="activity" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:6px;"></i>Traffic Intensity </label>
+       <div class="flex items-center gap-2"><button id="intensityLowBtn" class="flex-1 px-2 py-1 text-xs rounded transition" style="background: #06d6a022; color: #06d6a0; border: 1px solid #06d6a0;">Low</button> <button id="intensityMedBtn" class="flex-1 px-2 py-1 text-xs rounded transition" style="background: #eab30822; color: #eab308; border: 1px solid #eab308;">Med</button> <button id="intensityHighBtn" class="flex-1 px-2 py-1 text-xs rounded transition" style="background: #ef444422; color: #ef4444; border: 1px solid #ef4444;">High</button>
+       </div>
+      </div>
+     </div><!-- Main Grid: Map + Sidebar -->
+     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4"><!-- Intersection Map -->
+      <div class="lg:col-span-2 rounded-xl p-4 fade-in delay-3" style="background: var(--surface);">
+       <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold" style="color: var(--text);">Live Intersection Grid</h2><span class="text-xs font-mono px-2 py-1 rounded" style="background: #06d6a018; color: var(--primary);">4×4 Network</span>
+       </div>
+       <div id="intersectionGrid" class="grid grid-cols-4 gap-2" style="min-height: 280px;"></div>
+       <div class="flex items-center gap-4 mt-3 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #22c55e;"></span> Low</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #eab308;"></span> Medium</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #ef4444;"></span> High</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: #a78bfa;"></span> Adaptive Active</span>
+       </div>
+      </div><!-- Sidebar -->
+      <div class="space-y-4"><!-- Signal Status -->
+       <div class="rounded-xl p-4 fade-in delay-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Signal Optimization</h2>
+        <div id="signalList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+       </div><!-- Congestion Alerts -->
+       <div class="rounded-xl p-4 fade-in delay-5" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Active Alerts</h2>
+        <div id="alertList" class="space-y-2 max-h-40 overflow-y-auto"></div>
+       </div>
+      </div>
+     </div><!-- Throughput Chart -->
+     <div class="rounded-xl p-4 mt-4 fade-in delay-5" style="background: var(--surface);">
+      <div class="flex items-center justify-between mb-3">
+       <h2 class="text-sm font-semibold" style="color: var(--text);">Throughput Over Time</h2>
+       <div class="flex items-center gap-3 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-3 h-1 rounded" style="background: var(--primary);"></span> Adaptive</span> <span class="flex items-center gap-1"><span class="w-3 h-1 rounded" style="background: var(--secondary);"></span> Fixed Timing</span>
+       </div>
+      </div>
+      <div id="throughputChart" class="flex items-end gap-1" style="height: 120px;"></div>
+     </div>
+    </div><!-- Tab: Detection -->
+    <div id="tab-detection" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="video" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Computer Vision — Vehicle Detection</h2>
+       <div class="relative rounded-lg overflow-hidden" style="background: #0a0e18;">
+        <canvas id="detectionCanvas" width="560" height="360" class="w-full detection-canvas" style="background: #111827;"></canvas>
+        <div class="absolute top-2 left-2 px-2 py-1 rounded text-xs font-mono" style="background: #00000088; color: var(--primary);"><span class="w-2 h-2 rounded-full inline-block signal-active" style="background: var(--primary);"></span> CAM-01 • Intersection A1
+        </div>
+        <div class="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-mono" style="background: #00000088; color: var(--text);"><span id="detFps">30</span> FPS | <span id="detCount">0</span> vehicles
+        </div>
+       </div>
+       <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-lg p-2" style="background: var(--bg);">
+         <p class="text-xs" style="color: #64748b;">Cars</p>
+         <p id="detCars" class="text-lg font-bold font-mono" style="color: var(--primary);">0</p>
+        </div>
+        <div class="rounded-lg p-2" style="background: var(--bg);">
+         <p class="text-xs" style="color: #64748b;">Trucks</p>
+         <p id="detTrucks" class="text-lg font-bold font-mono" style="color: var(--secondary);">0</p>
+        </div>
+        <div class="rounded-lg p-2" style="background: var(--bg);">
+         <p class="text-xs" style="color: #64748b;">Bikes</p>
+         <p id="detBikes" class="text-lg font-bold font-mono" style="color: #a78bfa;">0</p>
+        </div>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Density Heatmap</h2>
+        <canvas id="heatmapCanvas" width="300" height="300" class="w-full rounded-lg" style="background: #111827;"></canvas>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Detection Confidence</h2>
+        <div id="confidenceBars" class="space-y-2"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Signals -->
+    <div id="tab-signals" class="tab-content hidden">
+     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="signalCards"></div>
+     <div class="rounded-xl p-4 mt-4" style="background: var(--surface);">
+      <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Signal Timing Comparison</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+       <div>
+        <h3 class="text-xs font-mono mb-2" style="color: var(--secondary);">Fixed Timing (Baseline)</h3>
+        <div id="fixedTimingBars" class="space-y-1"></div>
+       </div>
+       <div>
+        <h3 class="text-xs font-mono mb-2" style="color: var(--primary);">AI Adaptive Timing</h3>
+        <div id="adaptiveTimingBars" class="space-y-1"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Prediction -->
+    <div id="tab-prediction" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="brain" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Congestion Forecast — Next 60 min</h2>
+       <div id="forecastChart" class="relative" style="height: 200px;"></div>
+       <div class="flex items-center gap-3 mt-3 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-8 h-1 rounded" style="background: var(--primary);"></span> Predicted</span> <span class="flex items-center gap-1"><span class="w-8 h-1 rounded" style="background: #64748b;"></span> Actual</span> <span class="flex items-center gap-1"><span class="w-8 h-1 rounded" style="background: var(--secondary); opacity:0.3;"></span> Confidence Band</span>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Model Metrics</h2>
+        <div class="grid grid-cols-2 gap-3">
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">Accuracy</p>
+          <p id="predAccuracy" class="text-xl font-bold font-mono" style="color: var(--primary);">0%</p>
+         </div>
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">RMSE</p>
+          <p id="predRmse" class="text-xl font-bold font-mono" style="color: var(--secondary);">0.0</p>
+         </div>
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">Precision</p>
+          <p id="predPrecision" class="text-xl font-bold font-mono" style="color: #a78bfa;">0%</p>
+         </div>
+         <div class="rounded-lg p-3 text-center" style="background: var(--bg);">
+          <p class="text-xs" style="color: #64748b;">Response Time</p>
+          <p id="predResponse" class="text-xl font-bold font-mono" style="color: var(--text);">0ms</p>
+         </div>
+        </div>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Predicted Hotspots</h2>
+        <div id="hotspotList" class="space-y-2"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Emergency -->
+    <div id="tab-emergency" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="ambulance" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Emergency Vehicle Priority System</h2>
+       <div id="emergencyVehicles" class="space-y-3"></div>
+       <div class="mt-4 p-3 rounded-lg" style="background: var(--bg);">
+        <p class="text-xs" style="color: #94a3b8; margin-bottom: 10px;">Status: <span id="emergencyStatus" style="color: var(--success);">No active emergencies</span></p><button id="triggerEmergencyBtn" class="px-4 py-2 rounded-lg text-xs font-semibold transition-all" style="background: #ff1744; color: white;">Trigger Emergency Vehicle</button>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Emergency Stats</h2>
+        <div class="space-y-2">
+         <div class="flex justify-between text-xs">
+          <span style="color: #64748b;">Total Responses</span> <span id="emergencyCount" class="font-mono" style="color: var(--primary);">0</span>
+         </div>
+         <div class="flex justify-between text-xs">
+          <span style="color: #64748b;">Avg Response Time</span> <span id="emergencyAvgTime" class="font-mono" style="color: var(--secondary);">0ms</span>
+         </div>
+         <div class="flex justify-between text-xs">
+          <span style="color: #64748b;">Priority Overrides</span> <span id="emergencyOverrides" class="font-mono" style="color: #ff1744;">0</span>
+         </div>
+        </div>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Clear Path Route</h2>
+        <div id="routeSuggestions" class="space-y-2 text-xs"></div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Tab: Performance -->
+    <div id="tab-performance" class="tab-content hidden">
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">Wait Time Reduction</p>
+       <p id="perfWaitRed" class="text-3xl font-bold font-mono" style="color: var(--primary);">0%</p>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">Congestion Estimation Accuracy</p>
+       <p id="perfCongAcc" class="text-3xl font-bold font-mono" style="color: var(--secondary);">0%</p>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">System Responsiveness</p>
+       <p id="perfResp" class="text-3xl font-bold font-mono" style="color: #a78bfa;">0ms</p>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <p class="text-xs" style="color: #64748b;">Total Optimizations</p>
+       <p id="perfOptCount" class="text-3xl font-bold font-mono" style="color: var(--text);">0</p>
+      </div>
+     </div>
+     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Adaptive vs Fixed — Wait Times</h2>
+       <div id="perfCompChart" class="flex items-end gap-1" style="height: 180px;"></div>
+       <div class="flex items-center gap-4 mt-2 text-xs" style="color: #64748b;"><span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: var(--primary);"></span> Adaptive AI</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background: var(--secondary);"></span> Fixed Timing</span>
+       </div>
+      </div>
+      <div class="rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Event Log</h2>
+       <div id="eventLog" class="space-y-1 max-h-64 overflow-y-auto font-mono text-xs" style="color: #94a3b8;"></div>
+      </div>
+     </div>
+    </div><!-- Tab: Learning -->
+    <div id="tab-learning" class="tab-content hidden">
+     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 rounded-xl p-4" style="background: var(--surface);">
+       <h2 class="text-sm font-semibold mb-3" style="color: var(--text);"><i data-lucide="brain" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> Self-Learning Optimization</h2>
+       <div class="space-y-2 mb-4">
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background: var(--bg);">
+         <div>
+          <p class="text-xs font-semibold" style="color: var(--text);">Learning Status</p>
+          <p class="text-xs" style="color: #94a3b8;">AI model adapting to traffic patterns</p>
+         </div>
+         <div id="learningStatus" class="w-3 h-3 rounded-full" style="background: #06d6a0; animation: learning 1s infinite;"></div>
+        </div>
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background: var(--bg);">
+         <div>
+          <p class="text-xs font-semibold" style="color: var(--text);">Model Accuracy</p>
+          <p id="modelAccuracy" class="text-lg font-bold font-mono" style="color: var(--primary);">0%</p>
+         </div>
+        </div>
+        <div class="flex items-center justify-between p-3 rounded-lg" style="background: var(--bg);">
+         <div>
+          <p class="text-xs font-semibold" style="color: var(--text);">Patterns Learned</p>
+          <p id="patternsLearned" class="text-lg font-bold font-mono" style="color: var(--success);">0</p>
+         </div>
+        </div>
+       </div>
+       <div class="p-3 rounded-lg" style="background: var(--bg);">
+        <h3 class="text-xs font-semibold mb-2" style="color: var(--text);">Training Epochs</h3>
+        <div id="learningChart" class="flex items-end gap-1" style="height: 120px;"></div>
+       </div>
+      </div>
+      <div class="space-y-4">
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Model Improvements</h2>
+        <div id="learningMetrics" class="space-y-2 text-xs"></div>
+       </div>
+       <div class="rounded-xl p-4" style="background: var(--surface);">
+        <h2 class="text-sm font-semibold mb-3" style="color: var(--text);">Data Insights</h2>
+        <div id="dataInsights" class="space-y-2 text-xs"></div>
+       </div>
+      </div>
+     </div>
+    </div>
+   </main>
+  </div>
+  <script>
+// ============================================================
+// SIMULATION ENGINE - ENHANCED WITH NEW FEATURES
+// ============================================================
+
+const SIM = {
+  running: true,
+  tick: 0,
+  speed: 1,
+  intersections: [],
+  throughputHistory: [],
+  fixedThroughputHistory: [],
+  forecastData: [],
+  actualData: [],
+  events: [],
+  totalOptimizations: 0,
+  // New features
+  weather: 'clear', // clear, rainy, foggy, snowy
+  weatherFactor: 1,
+  emergencyVehicles: [],
+  emergencyCount: 0,
+  emergencyTotalTime: 0,
+  emergencyOverrides: 0,
+  learningMode: false,
+  modelAccuracy: 65,
+  patternsLearned: 0,
+  trainingEpochs: [],
+  aiModel: { weights: [], lastAccuracy: 65 },
+};
+
+const GRID = 4;
+const INTERSECTION_COUNT = GRID * GRID;
+const INTERSECTION_NAMES = [];
+
+// Generate intersection names
+for (let r = 0; r < GRID; r++) {
+  for (let c = 0; c < GRID; c++) {
+    INTERSECTION_NAMES.push(String.fromCharCode(65 + r) + (c + 1));
+  }
+}
+
+// Weather effects on congestion
+const WEATHER_CONFIG = {
+  clear: { congestionFactor: 1, name: 'Clear', icon: '☀️', color: '#60a5fa' },
+  rainy: { congestionFactor: 1.3, name: 'Rainy', icon: '🌧️', color: '#3b82f6' },
+  foggy: { congestionFactor: 1.5, name: 'Foggy', icon: '🌫️', color: '#94a3b8' },
+  snowy: { congestionFactor: 1.8, name: 'Snowy', icon: '❄️', color: '#e0f2fe' },
+};
+
+// Initialize intersections with traffic state
+function initIntersections() {
+  SIM.intersections = INTERSECTION_NAMES.map((name, i) => ({
+    id: i,
+    name,
+    density: Math.random() * 0.4 + 0.1,
+    phase: Math.floor(Math.random() * 3),
+    phaseTimer: Math.floor(Math.random() * 30) + 5,
+    fixedGreen: 30,
+    adaptiveGreen: 30,
+    waitTime: Math.random() * 20 + 5,
+    fixedWaitTime: Math.random() * 30 + 15,
+    vehicles: Math.floor(Math.random() * 20) + 3,
+    throughput: Math.floor(Math.random() * 8) + 2,
+    adaptiveActive: false,
+    cars: 0, trucks: 0, bikes: 0,
+    emergencyPriority: false,
+    timeToService: 0,
+  }));
+}
+
+// Emergency vehicle class
+class EmergencyVehicle {
+  constructor(id, startIntersection) {
+    this.id = id;
+    this.createdAt = SIM.tick;
+    this.startIntersection = startIntersection;
+    this.currentIntersection = startIntersection;
+    this.targetIntersection = Math.floor(Math.random() * 16);
+    this.status = 'en-route';
+    this.responseStarted = SIM.tick;
+    this.cleared = false;
+  }
+
+  getRoute() {
+    const route = [];
+    const startRow = Math.floor(this.currentIntersection / 4);
+    const startCol = this.currentIntersection % 4;
+    const endRow = Math.floor(this.targetIntersection / 4);
+    const endCol = this.targetIntersection % 4;
+
+    let r = startRow, c = startCol;
+    while (r !== endRow || c !== endCol) {
+      if (r < endRow) r++;
+      else if (r > endRow) r--;
+      else if (c < endCol) c++;
+      else if (c > endCol) c--;
+      route.push(r * 4 + c);
+    }
+    return route;
+  }
+}
+
+// Simulate emergency vehicle
+function triggerEmergencyVehicle() {
+  const startIntersection = Math.floor(Math.random() * 16);
+  const emergency = new EmergencyVehicle(SIM.emergencyCount++, startIntersection);
+  SIM.emergencyVehicles.push(emergency);
+  addEvent(`🚨 Emergency vehicle #${emergency.id} dispatched from ${INTERSECTION_NAMES[startIntersection]}`);
+  showEmergencyBanner(true);
+}
+
+function processEmergencies() {
+  SIM.emergencyVehicles = SIM.emergencyVehicles.filter(em => {
+    const route = em.getRoute();
+    em.currentIntersection = route[0] || em.targetIntersection;
+
+    // Check if reached destination
+    if (em.currentIntersection === em.targetIntersection) {
+      if (!em.cleared) {
+        em.cleared = true;
+        em.status = 'arrived';
+        const responseTime = (SIM.tick - em.createdAt) * 2;
+        SIM.emergencyTotalTime += responseTime;
+        SIM.emergencyOverrides++;
+        addEvent(`✓ Emergency vehicle #${em.id} arrived at destination (${responseTime}ms)`);
+        showEmergencyBanner(false);
+      }
+      return SIM.tick - em.createdAt < 200;
+    }
+
+    // Set emergency priority on current intersection
+    if (em.currentIntersection < 16) {
+      const int = SIM.intersections[em.currentIntersection];
+      int.emergencyPriority = true;
+      int.adaptiveGreen = Math.max(int.adaptiveGreen, 40);
+      int.phase = 0;
+      int.phaseTimer = int.adaptiveGreen;
+      SIM.emergencyOverrides++;
+    }
+
+    return true;
+  });
+}
+
+// Weather system
+function updateWeather() {
+  if (SIM.tick % 60 === 0) {
+    const weatherTypes = Object.keys(WEATHER_CONFIG);
+    SIM.weather = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
+    SIM.weatherFactor = WEATHER_CONFIG[SIM.weather].congestionFactor;
+
+    const config = WEATHER_CONFIG[SIM.weather];
+    document.getElementById('weatherIcon').textContent = config.icon;
+    document.getElementById('weatherLabel').textContent = config.name;
+
+    addEvent(`🌤️ Weather changed to ${config.name}`);
+  }
+}
+
+// Simple neural network for learning
+function trainModel() {
+  if (SIM.tick % 40 === 0 && SIM.learningMode) {
+    const avgDensity = SIM.intersections.reduce((s, i) => s + i.density, 0) / INTERSECTION_COUNT;
+    const prediction = Math.random() * 0.8;
+    const error = Math.abs(prediction - avgDensity);
+    const improvement = Math.max(0, 1 - error) * 100;
+
+    SIM.modelAccuracy = Math.min(95, SIM.modelAccuracy + improvement * 0.01);
+    SIM.patternsLearned++;
+    SIM.trainingEpochs.push(SIM.modelAccuracy);
+    if (SIM.trainingEpochs.length > 30) SIM.trainingEpochs.shift();
+
+    if (SIM.patternsLearned % 5 === 0) {
+      addEvent(`📚 Model trained on pattern #${SIM.patternsLearned} (accuracy: ${SIM.modelAccuracy.toFixed(1)}%)`);
+      document.getElementById('learningBadge').style.display = 'inline-block';
+    }
+  }
+}
+
+// Smart route suggestion
+function suggestRoutes() {
+  const routes = [];
+  for (let i = 0; i < 3; i++) {
+    const density = Math.random() * 0.5;
+    const time = Math.floor(8 + density * 20);
+    routes.push({
+      name: `Route ${i + 1}`,
+      density: (density * 100).toFixed(0),
+      time: time,
+      cost: Math.floor(Math.random() * 30) + 10,
+    });
+  }
+  return routes.sort((a, b) => a.time - b.time);
+}
+
+// ============================================================
+// SIMULATION STEP
+// ============================================================
+
+function simStep() {
+  if (!SIM.running) return;
+  SIM.tick++;
+
+  updateWeather();
+  processEmergencies();
+  trainModel();
+
+  const hourOfDay = (SIM.tick * 0.02) % 24;
+  const rushFactor = (1 + 0.8 * Math.exp(-((hourOfDay - 8) ** 2) / 4) + 0.6 * Math.exp(-((hourOfDay - 17) ** 2) / 4)) * SIM.weatherFactor;
+
+  SIM.intersections.forEach((int, idx) => {
+    const neighborInfluence = getNeighborDensity(idx) * 0.1;
+    int.density += (Math.random() - 0.48) * 0.06 * rushFactor + neighborInfluence;
+    int.density = Math.max(0.05, Math.min(1, int.density));
+
+    int.vehicles = Math.floor(int.density * 50) + Math.floor(Math.random() * 5);
+    int.cars = Math.floor(int.vehicles * 0.7);
+    int.trucks = Math.floor(int.vehicles * 0.15);
+    int.bikes = int.vehicles - int.cars - int.trucks;
+
+    // Phase timing with emergency override
+    if (int.emergencyPriority) {
+      int.phase = 0;
+      int.phaseTimer = 40;
+      int.emergencyPriority = false;
+    } else {
+      int.phaseTimer--;
+      if (int.phaseTimer <= 0) {
+        int.phase = (int.phase + 1) % 3;
+        if (int.phase === 0) {
+          int.adaptiveGreen = Math.floor(15 + int.density * 45);
+          int.phaseTimer = int.adaptiveGreen;
+          int.adaptiveActive = int.density > 0.5;
+          if (int.adaptiveActive) SIM.totalOptimizations++;
+        } else if (int.phase === 1) {
+          int.phaseTimer = 4;
+        } else {
+          int.phaseTimer = Math.floor(10 + (1 - int.density) * 20);
+        }
+      }
+    }
+
+    int.waitTime = Math.max(3, int.density * 25 + (Math.random() - 0.5) * 4);
+    int.fixedWaitTime = Math.max(8, int.density * 40 + (Math.random() - 0.5) * 5);
+    int.throughput = Math.floor((1 - int.density * 0.6) * 12 + Math.random() * 3);
+  });
+
+  const totalVehicles = SIM.intersections.reduce((s, i) => s + i.vehicles, 0);
+  const avgAdaptiveTP = SIM.intersections.reduce((s, i) => s + i.throughput, 0) / INTERSECTION_COUNT;
+  const avgFixedTP = avgAdaptiveTP * (0.6 + Math.random() * 0.15);
+
+  SIM.throughputHistory.push(avgAdaptiveTP);
+  SIM.fixedThroughputHistory.push(avgFixedTP);
+  if (SIM.throughputHistory.length > 60) {
+    SIM.throughputHistory.shift();
+    SIM.fixedThroughputHistory.shift();
+  }
+
+  if (SIM.tick % 5 === 0) {
+    const avgDensity = SIM.intersections.reduce((s, i) => s + i.density, 0) / INTERSECTION_COUNT;
+    SIM.actualData.push(avgDensity);
+    SIM.forecastData.push(avgDensity + (Math.random() - 0.5) * 0.12);
+    if (SIM.actualData.length > 30) {
+      SIM.actualData.shift();
+      SIM.forecastData.shift();
+    }
+  }
+
+  if (SIM.tick % 8 === 0) {
+    const congested = SIM.intersections.filter(i => i.density > 0.7);
+    if (congested.length > 0) {
+      const target = congested[Math.floor(Math.random() * congested.length)];
+      addEvent(`Signal ${target.name} adjusted: green +${Math.floor(target.density * 15)}s`);
+    }
+    if (Math.random() > 0.7) {
+      addEvent(`Prediction: density increase at ${INTERSECTION_NAMES[Math.floor(Math.random() * 16)]}`);
+    }
+  }
+}
+
+function getNeighborDensity(idx) {
+  const row = Math.floor(idx / GRID);
+  const col = idx % GRID;
+  let sum = 0, count = 0;
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr, dc]) => {
+    const nr = row + dr, nc = col + dc;
+    if (nr >= 0 && nr < GRID && nc >= 0 && nc < GRID) {
+      sum += SIM.intersections[nr * GRID + nc].density;
+      count++;
+    }
+  });
+  return count > 0 ? (sum / count - SIM.intersections[idx].density) : 0;
+}
+
+function addEvent(msg) {
+  const time = formatClock(SIM.tick);
+  SIM.events.unshift({ time, msg });
+  if (SIM.events.length > 50) SIM.events.pop();
+}
+
+function showEmergencyBanner(show) {
+  const banner = document.getElementById('emergencyBanner');
+  if (show) {
+    banner.classList.remove('hidden');
+  } else if (SIM.emergencyVehicles.length === 0) {
+    banner.classList.add('hidden');
+  }
+}
+
+function formatClock(tick) {
+  const totalSec = tick * 2;
+  const h = Math.floor(totalSec / 3600) % 24;
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// ============================================================
+// ENHANCED RENDERING WITH NEW TABS
+// ============================================================
+
+// Emergency tab rendering
+function renderEmergency() {
+  const container = document.getElementById('emergencyVehicles');
+  const vehicles = SIM.emergencyVehicles.slice(0, 5);
+
+  while (container.children.length < vehicles.length) {
+    const d = document.createElement('div');
+    d.className = 'p-3 rounded-lg emergency-active';
+    d.style.background = '#ff174418';
+    d.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-mono font-bold" style="color: #ff1744;"></span>
+        <span class="text-xs font-mono" style="color: #ff1744;"></span>
+      </div>
+      <div class="space-y-1 text-xs">
+        <div class="flex justify-between"><span style="color: #94a3b8;">Route</span><span class="font-mono" style="color: var(--text);"></span></div>
+        <div class="flex justify-between"><span style="color: #94a3b8;">Status</span><span class="font-mono" style="color: var(--success);"></span></div>
+        <div class="flex justify-between"><span style="color: #94a3b8;">Response Time</span><span class="font-mono" style="color: var(--secondary);"></span></div>
+      </div>
+    `;
+    container.appendChild(d);
+  }
+
+  vehicles.forEach((em, i) => {
+    const el = container.children[i];
+    el.children[0].children[0].textContent = `🚨 Vehicle #${em.id}`;
+    el.children[0].children[1].textContent = em.status.toUpperCase();
+    const route = em.getRoute();
+    el.children[1].children[0].children[1].textContent = route.map(r => INTERSECTION_NAMES[r]).join(' → ');
+    el.children[1].children[1].children[1].textContent = em.status;
+    const responseTime = (SIM.tick - em.createdAt) * 2;
+    el.children[1].children[2].children[1].textContent = responseTime + 'ms';
+  });
+
+  while (container.children.length > vehicles.length) container.removeChild(container.lastChild);
+
+  // Emergency stats
+  document.getElementById('emergencyCount').textContent = SIM.emergencyCount;
+  const avgTime = SIM.emergencyCount > 0 ? (SIM.emergencyTotalTime / SIM.emergencyCount).toFixed(0) : 0;
+  document.getElementById('emergencyAvgTime').textContent = avgTime + 'ms';
+  document.getElementById('emergencyOverrides').textContent = SIM.emergencyOverrides;
+
+  // Route suggestions
+  const routeContainer = document.getElementById('routeSuggestions');
+  const routes = suggestRoutes();
+  while (routeContainer.children.length < routes.length) {
+    const d = document.createElement('div');
+    d.className = 'p-2 rounded-lg' style="background: var(--bg);";
+    d.innerHTML = `<div class="flex justify-between"><span class="font-mono text-xs"></span><span class="text-xs" style="color: #94a3b8;"></span></div>`;
+    routeContainer.appendChild(d);
+  }
+  routes.forEach((rt, i) => {
+    const el = routeContainer.children[i];
+    el.children[0].children[0].textContent = rt.name + ' • ' + rt.time + 'min';
+    el.children[0].children[0].style.color = 'var(--text)';
+    el.children[0].children[1].textContent = rt.density + '% density';
+  });
+}
+
+// Learning tab rendering
+function renderLearning() {
+  document.getElementById('modelAccuracy').textContent = SIM.modelAccuracy.toFixed(1) + '%';
+  document.getElementById('patternsLearned').textContent = SIM.patternsLearned;
+
+  // Training epochs chart
+  const container = document.getElementById('learningChart');
+  if (!container) return;
+  const maxAcc = 100;
+  const count = SIM.trainingEpochs.length;
+
+  while (container.children.length < count) {
+    const bar = document.createElement('div');
+    bar.style.flex = '1';
+    bar.style.minWidth = '0';
+    bar.style.background = 'var(--primary)';
+    bar.style.borderRadius = '3px 3px 0 0';
+    bar.style.transition = 'height 0.3s ease';
+    container.appendChild(bar);
+  }
+
+  SIM.trainingEpochs.forEach((acc, i) => {
+    const bar = container.children[i];
+    bar.style.height = ((acc / maxAcc) * 100) + '%';
+  });
+
+  while (container.children.length > count) container.removeChild(container.lastChild);
+
+  // Learning metrics
+  const metricsContainer = document.getElementById('learningMetrics');
+  const metrics = [
+    { label: 'Layers', value: Math.floor(SIM.patternsLearned / 10) + 1 },
+    { label: 'Params', value: Math.floor(SIM.modelAccuracy * 80) + 'K' },
+    { label: 'Loss', value: (100 - SIM.modelAccuracy).toFixed(2) + '%' },
+  ];
+
+  while (metricsContainer.children.length < metrics.length) {
+    const d = document.createElement('div');
+    d.className = 'flex justify-between rounded-lg p-2' style="background: var(--bg);";
+    d.innerHTML = `<span class="text-xs" style="color: #64748b;"></span><span class="text-xs font-mono" style="color: var(--primary);"></span>`;
+    metricsContainer.appendChild(d);
+  }
+
+  metrics.forEach((m, i) => {
+    const el = metricsContainer.children[i];
+    el.children[0].textContent = m.label;
+    el.children[1].textContent = m.value;
+  });
+
+  // Data insights
+  const insightsContainer = document.getElementById('dataInsights');
+  const insights = [
+    'Peak hours: 8-9 AM, 5-6 PM',
+    'Avg vehicles/min: ' + Math.floor(SIM.intersections.reduce((s, i) => s + i.vehicles, 0) / 16),
+    'Network efficiency: ' + (75 + SIM.modelAccuracy * 0.3).toFixed(0) + '%',
+  ];
+
+  while (insightsContainer.children.length < insights.length) {
+    const d = document.createElement('div');
+    d.className = 'text-xs p-2 rounded-lg' style="background: var(--bg); color: #94a3b8;";
+    insightsContainer.appendChild(d);
+  }
+
+  insights.forEach((ins, i) => {
+    insightsContainer.children[i].textContent = ins;
+  });
+}
+
+
+function renderOverview() {
+  const totalVehicles = SIM.intersections.reduce((s, i) => s + i.vehicles, 0);
+  const avgWait = SIM.intersections.reduce((s, i) => s + i.waitTime, 0) / INTERSECTION_COUNT;
+  const avgFixedWait = SIM.intersections.reduce((s, i) => s + i.fixedWaitTime, 0) / INTERSECTION_COUNT;
+  const avgDensity = SIM.intersections.reduce((s, i) => s + i.density, 0) / INTERSECTION_COUNT;
+  const avgTP = SIM.intersections.reduce((s, i) => s + i.throughput, 0) / INTERSECTION_COUNT;
+  const waitReduction = Math.max(0, ((avgFixedWait - avgWait) / avgFixedWait) * 100);
+
+  document.getElementById('kpiVehicles').textContent = totalVehicles;
+  document.getElementById('kpiWait').textContent = avgWait.toFixed(1) + 's';
+  document.getElementById('kpiWaitTrend').textContent = `-${waitReduction.toFixed(0)}% vs fixed`;
+  document.getElementById('kpiCongestion').textContent = avgDensity.toFixed(2);
+  document.getElementById('kpiCongTrend').textContent = avgDensity < 0.4 ? 'Low congestion' : avgDensity < 0.65 ? 'Moderate' : 'High congestion';
+  document.getElementById('kpiCongTrend').style.color = avgDensity < 0.4 ? 'var(--primary)' : avgDensity < 0.65 ? 'var(--secondary)' : '#ef4444';
+  document.getElementById('kpiThroughput').textContent = avgTP.toFixed(1) + '/min';
+  document.getElementById('kpiThroughTrend').textContent = `+${(waitReduction * 0.8).toFixed(0)}% improvement`;
+  document.getElementById('simClock').textContent = formatClock(SIM.tick);
+
+  // Intersection grid
+  const grid = document.getElementById('intersectionGrid');
+  SIM.intersections.forEach((int, i) => {
+    let cell = grid.children[i];
+    if (!cell) {
+      cell = document.createElement('div');
+      cell.className = 'intersection-cell relative flex flex-col items-center justify-center cursor-pointer';
+      cell.title = int.name;
+      cell.innerHTML = `
+        <span class="text-xs font-mono font-bold" style="color: var(--text);">${int.name}</span>
+        <span class="text-[10px] font-mono mt-0.5" style="color: #94a3b8;">0</span>
+        <div class="flex gap-0.5 mt-1">
+          <span class="w-2 h-2 rounded-full"></span>
+          <span class="w-2 h-2 rounded-full"></span>
+          <span class="w-2 h-2 rounded-full"></span>
+        </div>
+      `;
+      grid.appendChild(cell);
+    }
+    // Color by density
+    const hue = int.density < 0.4 ? '#22c55e33' : int.density < 0.65 ? '#eab30833' : '#ef444433';
+    const border = int.adaptiveActive ? '2px solid #a78bfa' : '1px solid #1e293b';
+    cell.style.background = hue;
+    cell.style.border = border;
+
+    cell.children[1].textContent = int.vehicles + ' veh';
+
+    const lights = cell.children[2].children;
+    lights[0].className = 'w-2 h-2 rounded-full ' + (int.phase === 2 ? 'light-red signal-active' : 'light-off');
+    lights[1].className = 'w-2 h-2 rounded-full ' + (int.phase === 1 ? 'light-yellow signal-active' : 'light-off');
+    lights[2].className = 'w-2 h-2 rounded-full ' + (int.phase === 0 ? 'light-green signal-active' : 'light-off');
+  });
+
+  // Signal list
+  const signalList = document.getElementById('signalList');
+  const sorted = [...SIM.intersections].sort((a, b) => b.density - a.density).slice(0, 6);
+  while (signalList.children.length < sorted.length) {
+    const d = document.createElement('div');
+    d.className = 'flex items-center justify-between rounded-lg px-3 py-2';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `<div><span class="text-xs font-mono font-bold"></span><span class="text-[10px] ml-2" style="color: #64748b;"></span></div><span class="text-xs font-mono px-2 py-0.5 rounded"></span>`;
+    signalList.appendChild(d);
+  }
+  sorted.forEach((int, i) => {
+    const el = signalList.children[i];
+    el.children[0].children[0].textContent = int.name;
+    el.children[0].children[0].style.color = 'var(--text)';
+    el.children[0].children[1].textContent = `${int.adaptiveGreen}s green`;
+    const badge = el.children[1];
+    if (int.adaptiveActive) {
+      badge.textContent = 'ADAPTIVE';
+      badge.style.background = '#a78bfa22';
+      badge.style.color = '#a78bfa';
+    } else {
+      badge.textContent = int.density < 0.4 ? 'NORMAL' : 'MONITORING';
+      badge.style.background = int.density < 0.4 ? '#06d6a018' : '#eab30818';
+      badge.style.color = int.density < 0.4 ? 'var(--primary)' : 'var(--secondary)';
+    }
+  });
+  while (signalList.children.length > sorted.length) signalList.removeChild(signalList.lastChild);
+
+  // Alerts
+  const alertList = document.getElementById('alertList');
+  const alerts = SIM.intersections.filter(i => i.density > 0.6).sort((a, b) => b.density - a.density).slice(0, 5);
+  while (alertList.children.length < alerts.length) {
+    const d = document.createElement('div');
+    d.className = 'rounded-lg px-3 py-2';
+    d.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i><span class="text-xs font-mono"></span></div>`;
+    alertList.appendChild(d);
+    lucide.createIcons({ attrs: { class: '' }, nameAttr: 'data-lucide' });
+  }
+  alerts.forEach((int, i) => {
+    const el = alertList.children[i];
+    const cls = int.density > 0.75 ? 'congestion-high' : 'congestion-med';
+    el.className = `rounded-lg px-3 py-2 ${cls}`;
+    el.querySelector('span').textContent = `${int.name}: density ${(int.density * 100).toFixed(0)}%`;
+  });
+  while (alertList.children.length > alerts.length) alertList.removeChild(alertList.lastChild);
+
+  // Throughput chart
+  renderBarChart('throughputChart', SIM.throughputHistory, SIM.fixedThroughputHistory);
+}
+
+function renderBarChart(containerId, data1, data2) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const maxVal = Math.max(...data1, ...data2, 1);
+  const count = data1.length;
+
+  while (container.children.length < count) {
+    const group = document.createElement('div');
+    group.className = 'flex gap-px items-end flex-1';
+    group.style.minWidth = '0';
+    group.innerHTML = `<div class="flex-1 rounded-t transition-all" style="background: var(--primary);"></div><div class="flex-1 rounded-t transition-all" style="background: var(--secondary); opacity: 0.5;"></div>`;
+    container.appendChild(group);
+  }
+  while (container.children.length > count) container.removeChild(container.lastChild);
+
+  for (let i = 0; i < count; i++) {
+    const group = container.children[i];
+    group.children[0].style.height = ((data1[i] / maxVal) * 100) + '%';
+    group.children[1].style.height = ((data2[i] / maxVal) * 100) + '%';
+  }
+}
+
+// Detection tab
+function renderDetection() {
+  const canvas = document.getElementById('detectionCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  // Draw road background
+  ctx.fillStyle = '#1a1f35';
+  ctx.fillRect(0, 0, w, h);
+
+  // Road lines
+  ctx.strokeStyle = '#2a3456';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < h; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // Horizontal road
+  ctx.fillStyle = '#252d48';
+  ctx.fillRect(0, h * 0.4, w, h * 0.2);
+  // Vertical road
+  ctx.fillRect(w * 0.4, 0, w * 0.2, h);
+
+  // Lane markings
+  ctx.setLineDash([10, 10]);
+  ctx.strokeStyle = '#4a5578';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h * 0.5); ctx.lineTo(w, h * 0.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(w * 0.5, 0); ctx.lineTo(w * 0.5, h); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Simulated vehicles as rectangles with bounding boxes
+  const int = SIM.intersections[0];
+  const vCount = int.vehicles;
+  const seed = SIM.tick;
+
+  for (let v = 0; v < Math.min(vCount, 25); v++) {
+    const pseudo = ((seed * 31 + v * 137) % 1000) / 1000;
+    const pseudo2 = ((seed * 17 + v * 89) % 1000) / 1000;
+    const type = pseudo < 0.7 ? 'car' : pseudo < 0.85 ? 'truck' : 'bike';
+
+    let vx, vy, vw, vh;
+    if (v % 2 === 0) {
+      // Horizontal road
+      vx = (pseudo * w + SIM.tick * (2 + v * 0.3)) % w;
+      vy = h * 0.4 + pseudo2 * h * 0.16;
+      vw = type === 'truck' ? 36 : type === 'car' ? 24 : 14;
+      vh = type === 'truck' ? 16 : type === 'car' ? 12 : 8;
+    } else {
+      // Vertical road
+      vx = w * 0.4 + pseudo2 * w * 0.16;
+      vy = (pseudo * h + SIM.tick * (1.5 + v * 0.2)) % h;
+      vw = type === 'truck' ? 16 : type === 'car' ? 12 : 8;
+      vh = type === 'truck' ? 36 : type === 'car' ? 24 : 14;
+    }
+
+    // Vehicle body
+    const colors = { car: '#06d6a0', truck: '#f77f00', bike: '#a78bfa' };
+    ctx.fillStyle = colors[type];
+    ctx.fillRect(vx, vy, vw, vh);
+
+    // Bounding box
+    ctx.strokeStyle = colors[type];
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vx - 4, vy - 4, vw + 8, vh + 8);
+
+    // Confidence label
+    const conf = (0.82 + pseudo * 0.17).toFixed(2);
+    ctx.fillStyle = '#00000088';
+    ctx.fillRect(vx - 4, vy - 16, 44, 12);
+    ctx.fillStyle = colors[type];
+    ctx.font = '9px JetBrains Mono';
+    ctx.fillText(`${type} ${conf}`, vx - 2, vy - 6);
+  }
+
+  // Update counts
+  document.getElementById('detCount').textContent = vCount;
+  document.getElementById('detCars').textContent = int.cars;
+  document.getElementById('detTrucks').textContent = int.trucks;
+  document.getElementById('detBikes').textContent = int.bikes;
+  document.getElementById('detFps').textContent = 28 + Math.floor(Math.random() * 5);
+
+  // Heatmap
+  renderHeatmap();
+
+  // Confidence bars
+  renderConfidenceBars();
+}
+
+function renderHeatmap() {
+  const canvas = document.getElementById('heatmapCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(0, 0, w, h);
+
+  const cellW = w / GRID, cellH = h / GRID;
+  SIM.intersections.forEach((int, i) => {
+    const row = Math.floor(i / GRID), col = i % GRID;
+    const alpha = int.density;
+    const r = Math.floor(239 * alpha + 6 * (1 - alpha));
+    const g = Math.floor(68 * alpha + 214 * (1 - alpha));
+    const b = Math.floor(68 * alpha + 160 * (1 - alpha));
+    ctx.fillStyle = `rgba(${r},${g},${b},${0.3 + alpha * 0.6})`;
+    ctx.fillRect(col * cellW + 2, row * cellH + 2, cellW - 4, cellH - 4);
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '11px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(int.name, col * cellW + cellW / 2, row * cellH + cellH / 2 + 4);
+  });
+}
+
+function renderConfidenceBars() {
+  const container = document.getElementById('confidenceBars');
+  if (!container) return;
+  const types = [
+    { name: 'Car Detection', val: 0.91 + Math.random() * 0.06, color: 'var(--primary)' },
+    { name: 'Truck Detection', val: 0.85 + Math.random() * 0.08, color: 'var(--secondary)' },
+    { name: 'Bike Detection', val: 0.78 + Math.random() * 0.1, color: '#a78bfa' },
+    { name: 'Density Estimation', val: 0.88 + Math.random() * 0.07, color: 'var(--text)' },
+  ];
+
+  while (container.children.length < types.length) {
+    const d = document.createElement('div');
+    d.innerHTML = `<div class="flex justify-between text-xs mb-1"><span></span><span class="font-mono"></span></div><div class="h-2 rounded-full" style="background: var(--bg);"><div class="h-full rounded-full transition-all"></div></div>`;
+    container.appendChild(d);
+  }
+
+  types.forEach((t, i) => {
+    const el = container.children[i];
+    el.querySelector('span:first-child').textContent = t.name;
+    el.querySelector('span:first-child').style.color = '#94a3b8';
+    el.querySelector('span:last-child').textContent = (t.val * 100).toFixed(1) + '%';
+    el.querySelector('span:last-child').style.color = t.color;
+    const bar = el.querySelector('.h-full');
+    bar.style.width = (t.val * 100) + '%';
+    bar.style.background = t.color;
+  });
+}
+
+// Signals tab
+function renderSignals() {
+  const container = document.getElementById('signalCards');
+  if (!container) return;
+
+  SIM.intersections.forEach((int, i) => {
+    let card = container.children[i];
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'rounded-xl p-4 card-hover';
+      card.style.background = 'var(--surface)';
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-bold font-mono" style="color: var(--text);"></span>
+          <div class="flex gap-1">
+            <span class="w-3 h-3 rounded-full"></span>
+            <span class="w-3 h-3 rounded-full"></span>
+            <span class="w-3 h-3 rounded-full"></span>
+          </div>
+        </div>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between"><span style="color: #64748b;">Density</span><span class="font-mono"></span></div>
+          <div class="h-1.5 rounded-full" style="background: var(--bg);"><div class="h-full rounded-full transition-all"></div></div>
+          <div class="flex justify-between"><span style="color: #64748b;">Green Phase</span><span class="font-mono"></span></div>
+          <div class="flex justify-between"><span style="color: #64748b;">Wait Time</span><span class="font-mono"></span></div>
+          <div class="flex justify-between"><span style="color: #64748b;">Mode</span><span class="font-mono text-xs px-1.5 py-0.5 rounded"></span></div>
+        </div>
+      `;
+      container.appendChild(card);
+    }
+
+    card.querySelector('.text-sm').textContent = int.name;
+    const lights = card.querySelectorAll('.w-3.h-3');
+    lights[0].className = 'w-3 h-3 rounded-full ' + (int.phase === 2 ? 'light-red signal-active' : 'light-off');
+    lights[1].className = 'w-3 h-3 rounded-full ' + (int.phase === 1 ? 'light-yellow signal-active' : 'light-off');
+    lights[2].className = 'w-3 h-3 rounded-full ' + (int.phase === 0 ? 'light-green signal-active' : 'light-off');
+
+    const spans = card.querySelectorAll('.font-mono');
+    spans[1].textContent = (int.density * 100).toFixed(0) + '%';
+    spans[1].style.color = int.density < 0.4 ? 'var(--primary)' : int.density < 0.65 ? 'var(--secondary)' : '#ef4444';
+
+    const densBar = card.querySelector('.h-full');
+    densBar.style.width = (int.density * 100) + '%';
+    densBar.style.background = int.density < 0.4 ? 'var(--primary)' : int.density < 0.65 ? 'var(--secondary)' : '#ef4444';
+
+    spans[2].textContent = int.adaptiveGreen + 's';
+    spans[2].style.color = 'var(--primary)';
+    spans[3].textContent = int.waitTime.toFixed(1) + 's';
+    spans[3].style.color = 'var(--text)';
+
+    const badge = spans[4];
+    if (int.adaptiveActive) {
+      badge.textContent = 'ADAPTIVE';
+      badge.style.background = '#a78bfa22';
+      badge.style.color = '#a78bfa';
+    } else {
+      badge.textContent = 'STANDARD';
+      badge.style.background = '#06d6a018';
+      badge.style.color = 'var(--primary)';
+    }
+  });
+
+  // Timing comparison
+  renderTimingComparison();
+}
+
+function renderTimingComparison() {
+  const fixedContainer = document.getElementById('fixedTimingBars');
+  const adaptiveContainer = document.getElementById('adaptiveTimingBars');
+  if (!fixedContainer || !adaptiveContainer) return;
+
+  const show = SIM.intersections.slice(0, 8);
+  [fixedContainer, adaptiveContainer].forEach((cont, ci) => {
+    while (cont.children.length < show.length) {
+      const d = document.createElement('div');
+      d.className = 'flex items-center gap-2';
+      d.innerHTML = `<span class="text-[10px] font-mono w-6" style="color: #64748b;"></span><div class="flex-1 h-3 rounded-full" style="background: var(--bg);"><div class="h-full rounded-full transition-all"></div></div><span class="text-[10px] font-mono w-8 text-right"></span>`;
+      cont.appendChild(d);
+    }
+    show.forEach((int, i) => {
+      const el = cont.children[i];
+      el.children[0].textContent = int.name;
+      const val = ci === 0 ? int.fixedGreen : int.adaptiveGreen;
+      const maxG = 60;
+      el.querySelector('.h-full').style.width = ((val / maxG) * 100) + '%';
+      el.querySelector('.h-full').style.background = ci === 0 ? 'var(--secondary)' : 'var(--primary)';
+      el.children[2].textContent = val + 's';
+      el.children[2].style.color = ci === 0 ? 'var(--secondary)' : 'var(--primary)';
+    });
+  });
+}
+
+// Prediction tab
+function renderPrediction() {
+  // Forecast chart using SVG
+  const container = document.getElementById('forecastChart');
+  if (!container || SIM.forecastData.length < 2) return;
+
+  const w = container.clientWidth || 500;
+  const h = 200;
+  const pad = 30;
+
+  const maxVal = Math.max(...SIM.forecastData, ...SIM.actualData, 0.01);
+  const points = SIM.actualData.length;
+
+  let actualPath = '';
+  let forecastPath = '';
+  let bandPath = '';
+
+  SIM.actualData.forEach((val, i) => {
+    const x = pad + (i / (points - 1 || 1)) * (w - pad * 2);
+    const y = h - pad - (val / maxVal) * (h - pad * 2);
+    actualPath += (i === 0 ? 'M' : 'L') + `${x},${y}`;
+  });
+
+  SIM.forecastData.forEach((val, i) => {
+    const x = pad + (i / (points - 1 || 1)) * (w - pad * 2);
+    const y = h - pad - (val / maxVal) * (h - pad * 2);
+    forecastPath += (i === 0 ? 'M' : 'L') + `${x},${y}`;
+
+    const upper = h - pad - (Math.min(val + 0.1, 1) / maxVal) * (h - pad * 2);
+    const lower = h - pad - (Math.max(val - 0.1, 0) / maxVal) * (h - pad * 2);
+    bandPath += (i === 0 ? 'M' : 'L') + `${x},${upper}`;
+  });
+
+  // reverse for lower band
+  for (let i = points - 1; i >= 0; i--) {
+    const x = pad + (i / (points - 1 || 1)) * (w - pad * 2);
+    const val = SIM.forecastData[i];
+    const lower = h - pad - (Math.max(val - 0.1, 0) / maxVal) * (h - pad * 2);
+    bandPath += `L${x},${lower}`;
+  }
+  bandPath += 'Z';
+
+  container.innerHTML = `
+    <svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}">
+      <path d="${bandPath}" fill="var(--secondary)" opacity="0.12"/>
+      <path d="${actualPath}" fill="none" stroke="#64748b" stroke-width="2"/>
+      <path d="${forecastPath}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="6 3"/>
+    </svg>
+  `;
+
+  // Metrics
+  const accuracy = 85 + Math.sin(SIM.tick * 0.05) * 5 + Math.random() * 3;
+  const rmse = 0.08 + Math.random() * 0.04;
+  const precision = 82 + Math.random() * 8;
+  const respTime = 12 + Math.floor(Math.random() * 8);
+
+  document.getElementById('predAccuracy').textContent = accuracy.toFixed(1) + '%';
+  document.getElementById('predRmse').textContent = rmse.toFixed(3);
+  document.getElementById('predPrecision').textContent = precision.toFixed(1) + '%';
+  document.getElementById('predResponse').textContent = respTime + 'ms';
+
+  // Hotspots
+  const hotspotList = document.getElementById('hotspotList');
+  const hotspots = [...SIM.intersections].sort((a, b) => b.density - a.density).slice(0, 4);
+
+  while (hotspotList.children.length < hotspots.length) {
+    const d = document.createElement('div');
+    d.className = 'flex items-center justify-between rounded-lg px-3 py-2';
+    d.style.background = 'var(--bg)';
+    d.innerHTML = `<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full"></span><span class="text-xs font-mono"></span></div><span class="text-xs font-mono"></span>`;
+    hotspotList.appendChild(d);
+  }
+  hotspots.forEach((int, i) => {
+    const el = hotspotList.children[i];
+    const dot = el.querySelector('.w-2');
+    dot.style.background = int.density > 0.75 ? '#ef4444' : int.density > 0.5 ? '#eab308' : '#06d6a0';
+    el.querySelectorAll('.font-mono')[0].textContent = int.name + ' — ' + (int.density > 0.75 ? 'Critical' : int.density > 0.5 ? 'Warning' : 'Normal');
+    el.querySelectorAll('.font-mono')[0].style.color = 'var(--text)';
+    el.querySelectorAll('.font-mono')[1].textContent = (int.density * 100).toFixed(0) + '%';
+    el.querySelectorAll('.font-mono')[1].style.color = int.density > 0.75 ? '#ef4444' : int.density > 0.5 ? '#eab308' : 'var(--primary)';
+  });
+  while (hotspotList.children.length > hotspots.length) hotspotList.removeChild(hotspotList.lastChild);
+}
+
+// Performance tab
+function renderPerformance() {
+  const avgWait = SIM.intersections.reduce((s, i) => s + i.waitTime, 0) / INTERSECTION_COUNT;
+  const avgFixedWait = SIM.intersections.reduce((s, i) => s + i.fixedWaitTime, 0) / INTERSECTION_COUNT;
+  const waitReduction = Math.max(0, ((avgFixedWait - avgWait) / avgFixedWait) * 100);
+
+  document.getElementById('perfWaitRed').textContent = waitReduction.toFixed(1) + '%';
+  document.getElementById('perfCongAcc').textContent = (87 + Math.random() * 5).toFixed(1) + '%';
+  document.getElementById('perfResp').textContent = (14 + Math.floor(Math.random() * 6)) + 'ms';
+  document.getElementById('perfOptCount').textContent = SIM.totalOptimizations;
+
+  // Comparison chart
+  const compData1 = SIM.throughputHistory.map((v, i) => {
+    const fw = SIM.fixedThroughputHistory[i] || v * 0.7;
+    return v;
+  });
+  renderBarChart('perfCompChart', SIM.throughputHistory, SIM.fixedThroughputHistory);
+
+  // Event log
+  const logContainer = document.getElementById('eventLog');
+  while (logContainer.children.length < SIM.events.length) {
+    const d = document.createElement('div');
+    d.className = 'py-1 border-b';
+    d.style.borderColor = '#1e293b';
+    logContainer.appendChild(d);
+  }
+  while (logContainer.children.length > SIM.events.length) logContainer.removeChild(logContainer.lastChild);
+  SIM.events.forEach((evt, i) => {
+    logContainer.children[i].innerHTML = `<span style="color: var(--primary);">[${evt.time}]</span> ${evt.msg}`;
+  });
+}
+
+// ============================================================
+// TAB NAVIGATION
+// ============================================================
+
+let activeTab = 'overview';
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.color = '#64748b';
+    });
+    btn.classList.add('active');
+    btn.style.color = 'var(--primary)';
+
+    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
+    document.getElementById('tab-' + activeTab).classList.remove('hidden');
+  });
+});
+
+// Toggle sim
+document.getElementById('toggleSimBtn').addEventListener('click', () => {
+  SIM.running = !SIM.running;
+  document.getElementById('toggleLabel').textContent = SIM.running ? 'Pause' : 'Resume';
+  document.getElementById('simStatus').textContent = SIM.running ? 'ACTIVE' : 'PAUSED';
+});
+
+// Trigger emergency button
+document.getElementById('triggerEmergencyBtn').addEventListener('click', () => {
+  triggerEmergencyVehicle();
+});
+
+// Toggle learning mode
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'l' || e.key === 'L') {
+    SIM.learningMode = !SIM.learningMode;
+    const badge = document.getElementById('learningBadge');
+    if (SIM.learningMode) {
+      badge.style.display = 'inline-block';
+      addEvent('📚 Learning mode activated');
+    } else {
+      badge.style.display = 'none';
+      addEvent('Learning mode deactivated');
+    }
+  }
+});
+
+// ============================================================
+// ELEMENT SDK
+// ============================================================
+
+const defaultConfig = {
+  dashboard_title: 'IntelliFlow AI',
+  city_name: 'Metro City',
+  background_color: '#0a0e27',
+  surface_color: '#141d3e',
+  text_color: '#e2e8f0',
+  primary_color: '#00d9ff',
+  secondary_color: '#ff6b35',
+  font_family: 'Outfit',
+  font_size: 14,
+};
+
+function applyConfig(config) {
+  const bg = config.background_color || defaultConfig.background_color;
+  const surface = config.surface_color || defaultConfig.surface_color;
+  const text = config.text_color || defaultConfig.text_color;
+  const primary = config.primary_color || defaultConfig.primary_color;
+  const secondary = config.secondary_color || defaultConfig.secondary_color;
+  const font = config.font_family || defaultConfig.font_family;
+  const fontSize = config.font_size || defaultConfig.font_size;
+
+  document.documentElement.style.setProperty('--bg', bg);
+  document.documentElement.style.setProperty('--surface', surface);
+  document.documentElement.style.setProperty('--text', text);
+  document.documentElement.style.setProperty('--primary', primary);
+  document.documentElement.style.setProperty('--secondary', secondary);
+
+  document.body.style.fontFamily = `${font}, Outfit, sans-serif`;
+  document.body.style.fontSize = fontSize + 'px';
+  document.body.style.background = bg;
+  document.body.style.color = text;
+
+  const app = document.getElementById('app');
+  if (app) app.style.background = bg;
+
+  const title = config.dashboard_title || defaultConfig.dashboard_title;
+  const city = config.city_name || defaultConfig.city_name;
+  document.getElementById('dashTitle').textContent = title;
+  document.getElementById('dashTitle').style.color = text;
+  document.getElementById('dashTitle').style.fontFamily = `${font}, Outfit, sans-serif`;
+  document.getElementById('dashTitle').style.fontSize = (fontSize * 1.3) + 'px';
+  document.getElementById('cityLabel').textContent = city + ' • AI Adaptive System';
+  document.getElementById('cityLabel').style.color = secondary;
+  document.getElementById('cityLabel').style.fontFamily = `JetBrains Mono, ${font}, monospace`;
+}
+
+if (window.elementSdk) {
+  window.elementSdk.init({
+    defaultConfig,
+    onConfigChange: async (config) => {
+      applyConfig(config);
+    },
+    mapToCapabilities: (config) => ({
+      recolorables: [
+        { get: () => config.background_color || defaultConfig.background_color, set: (v) => { config.background_color = v; window.elementSdk.setConfig({ background_color: v }); }},
+        { get: () => config.surface_color || defaultConfig.surface_color, set: (v) => { config.surface_color = v; window.elementSdk.setConfig({ surface_color: v }); }},
+        { get: () => config.text_color || defaultConfig.text_color, set: (v) => { config.text_color = v; window.elementSdk.setConfig({ text_color: v }); }},
+        { get: () => config.primary_color || defaultConfig.primary_color, set: (v) => { config.primary_color = v; window.elementSdk.setConfig({ primary_color: v }); }},
+        { get: () => config.secondary_color || defaultConfig.secondary_color, set: (v) => { config.secondary_color = v; window.elementSdk.setConfig({ secondary_color: v }); }},
+      ],
+      borderables: [],
+      fontEditable: {
+        get: () => config.font_family || defaultConfig.font_family,
+        set: (v) => { config.font_family = v; window.elementSdk.setConfig({ font_family: v }); }
+      },
+      fontSizeable: {
+        get: () => config.font_size || defaultConfig.font_size,
+        set: (v) => { config.font_size = v; window.elementSdk.setConfig({ font_size: v }); }
+      }
+    }),
+    mapToEditPanelValues: (config) => new Map([
+      ['dashboard_title', config.dashboard_title || defaultConfig.dashboard_title],
+      ['city_name', config.city_name || defaultConfig.city_name],
+    ])
+  });
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+
+initIntersections();
+addEvent('System initialized — AI traffic optimizer online');
+addEvent('16 intersections connected to adaptive network');
+
+function mainLoop() {
+  simStep();
+
+  if (activeTab === 'overview') renderOverview();
+  else if (activeTab === 'detection') renderDetection();
+  else if (activeTab === 'signals') renderSignals();
+  else if (activeTab === 'emergency') renderEmergency();
+  else if (activeTab === 'prediction') renderPrediction();
+  else if (activeTab === 'performance') renderPerformance();
+  else if (activeTab === 'learning') renderLearning();
+
+  setTimeout(mainLoop, 400);
+}
+
+// Initial render
+applyConfig(defaultConfig);
+lucide.createIcons();
+mainLoop();
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9dddb386d19b7dbf',t:'MTc3Mzc2ODM3Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
